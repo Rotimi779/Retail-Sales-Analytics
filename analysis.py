@@ -74,13 +74,46 @@ for name in ['customers', 'inventory', 'products','sales','stores']:
 
 
 #Run some queries to analyze the data for stores
+
 #Check the location of each of the stores and see which location has the highest sales (in terms of total price, number of units sold, number of distinct customers)
-#Redo the joins for this query  
+# query = """
+# SELECT st.region, SUM(s.quantity * p.price) AS total_revenue, SUM(s.quantity) AS total_units_sold, COUNT(DISTINCT s.customer_id) AS distinct_customers
+# FROM sales s INNER JOIN stores st ON s.store_id = st.store_id INNER JOIN products p ON s.product_id = p.product_id
+# GROUP BY st.region
+# ORDER BY total_revenue DESC, total_units_sold DESC, distinct_customers DESC
+# """ 
+# query_df = pd.read_sql_query(query, connection)
+# print("The following depicts which location has the highest sales (in terms of total price, number of units sold, number of distinct customers) \n", query_df)
+
+#Check which stores are the most popular in terms of number of customers and the number of sold products.
+# query = """
+# SELECT st.store_name,COUNT(DISTINCT s.customer_id) AS num_customers, COUNT(DISTINCT s.product_id) AS num_distinct_products
+# FROM sales s INNER JOIN stores st ON s.store_id = st.store_id
+# GROUP BY st.store_name
+# ORDER BY num_customers DESC, num_distinct_products DESC
+# """
+# query_df = pd.read_sql_query(query, connection)
+# print("The following depicts which stores are the most popular in terms of number of customers and the  number of sold products a: \n", query_df)
+
+#Check which cities are most popular in terms of total revenue accumulated, the number of customers and the number of sold products.
+# query = """
+# SELECT st.city, SUM(s.quantity * p.price) AS total_revenue, COUNT(DISTINCT s.customer_id) AS num_customers, COUNT(DISTINCT s.product_id) AS num_distinct_products
+# FROM sales s INNER JOIN stores st ON s.store_id = st.store_id INNER JOIN products p ON s.product_id = p.product_id
+# GROUP BY st.city
+# ORDER BY total_revenue DESC, num_customers DESC, num_distinct_products DESC
+# """
+# query_df = pd.read_sql_query(query, connection)
+# print("The following depicts which cities are most popular in terms of total revenue accumulated, number of customers and the number of sold products\n", query_df)
+
+
+
+
+#Create dashboards to visualize the queries below
+#What is the total revenue over the course of the past year for each of the locations?
+# FIX THE FORMAT FOR DATE IN THE CSV FILES
 query = """
-SELECT st.store_name,st.city,st.region, SUM(s.quantity * p.price) AS total_revenue, SUM(s.quantity) AS total_units_sold, COUNT(DISTINCT s.customer_id) AS distinct_customers
-FROM sales s INNER JOIN stores st ON s.store_id = st.store_id
-GROUP BY st.location
-ORDER BY total_revenue DESC, total_units_sold DESC, distinct_customers DESC
-""" 
+SELECT DISTINCT last_updated FROM sales LIMIT 10;
+
+"""
 query_df = pd.read_sql_query(query, connection)
-print("The following depicts which location has the highest sales (in terms of total price, number of units sold, number of distinct customers) \n", query_df)
+print("The following depicts the total revenue over tthe course of the past year for each of the locations:\n", query_df)
