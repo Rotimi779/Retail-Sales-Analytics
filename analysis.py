@@ -5,6 +5,10 @@ connection = sqlite3.connect('retail_sales.db')
 
 for name in ['customers', 'inventory', 'products','sales','stores']:
     df = pd.read_csv(f'{name}.csv')
+    if name in ['sales', 'inventory']:
+        # Convert date columns to datetime format
+        if 'last_updated' in df.columns:
+            df['last_updated'] = pd.to_datetime(df['last_updated'], errors='coerce').dt.date
     df.to_sql(name, connection, if_exists='replace', index=False)
 
 #Run some queries to analyze the data for customers
@@ -110,10 +114,56 @@ for name in ['customers', 'inventory', 'products','sales','stores']:
 
 #Create dashboards to visualize the queries below
 #What is the total revenue over the course of the past year for each of the locations?
-# FIX THE FORMAT FOR DATE IN THE CSV FILES
+# query = """
+# WITH monthly_rev AS(
+#     SELECT s.store_id,SUM(s.quantity * p.price) AS revenue, last_updated
+#     FROM sales s INNER JOIN products p ON s.product_id = p.product_id
+#     GROUP BY s.store_id,last_updated
+# )
+# SELECT s.region, SUM(m.revenue) AS total_revenue, strftime('%m/%Y', m.last_updated) AS month_year
+# FROM monthly_rev m INNER JOIN stores s ON m.store_id = s.store_id
+# GROUP BY s.region, strftime('%Y-%m', m.last_updated)
+# ORDER BY s.region,strftime('%Y-%m', m.last_updated)
+# """
+# query_df = pd.read_sql_query(query, connection)
+# print("The following depicts the total monthly revenue over tthe course of the past year for each of the locations:\n", query_df)
+
+
+
+
+#Now check the cumulative monthly revenue for each of the locations.
+# query = """
+# WITH cumulative AS(
+#     SELECT s.store_id, SUM(s.quantity * p.price) AS revenue, strftime('%Y-%m', last_updated) AS month_year
+#     FROM sales s INNER JOIN products p ON s.product_id = p.product_id
+#     GROUP BY s.store_id, month_year
+# )
+# SELECT s.region,SUM(c.revenue) AS rv FROM cumulative c JOIN stores s ON c.store_id = s.store_id
+
+# GROUP BY s.region
+
+# """
 query = """
-SELECT DISTINCT last_updated FROM sales LIMIT 10;
+WITH combined AS(
+    SELECT s.store_id, SUM(s.quantity * p.price) AS revenue, s.last_updated
+    FROM sales s INNER JOIN products p ON s.product_id = p.product_id
+    GROUP BY s.store_id, s.last_updated
+),
+monthly_rev AS(
+    SELECT s.region, SUM(c.revenue) AS total_revenue, strftime('%Y-%m', c.last_updated) AS year_month
+    FROM combined c INNER JOIN stores s ON c.store_id = s.store_id
+    GROUP BY s.region, year_month
+)
+SELECT region, year_month, SUM(total_revenue) OVER (PARTITION BY region ORDER BY year_month ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS cumulative_revenue
+FROM monthly_rev
+ORDER BY region, year_month
 
 """
 query_df = pd.read_sql_query(query, connection)
-print("The following depicts the total revenue over tthe course of the past year for each of the locations:\n", query_df)
+print("The following depicts the cumulative monthly revenue for each of the locations:\n", query_df)
+
+
+
+
+#Time to analyze the customer behavior. Look at customer behavior metrics such as average purchase frequency, average purchase value, and customer lifetime value.
+#Average purchase frequency is the average number of purchases made by a customer in a given time period
