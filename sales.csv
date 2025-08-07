@@ -1,4 +1,4 @@
-sale_id,store_id,product_id,customer_id,quantity,last_updated
+sale_id,store_id,product_id,customer_id,quantity,sale_date
 1,8,56,227,1,10/10/2024
 2,12,24,376,2,2/18/2025
 3,20,61,481,1,11/27/2024
