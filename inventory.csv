@@ -1,4 +1,4 @@
-store_id,product_id	,stock_quantity,last_updated
+store_id,product_id,stock_quantity,last_updated
 14,36,165,11/30/2024
 3,85,170,11/29/2024
 14,40,63,8/6/2024

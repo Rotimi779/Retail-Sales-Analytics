@@ -263,34 +263,112 @@ for name in ['customers', 'inventory', 'products','sales','stores']:
 
 #6
 #Finally for customer behavior metrics, look at customer retention rates and churn rates over the past year by age group.\
-query = """
-WITH age_groups AS (
-    SELECT customer_id, name, CASE
-        WHEN age BETWEEN 18 AND 24 THEN 'Young Adults'
-        WHEN age BETWEEN 25 AND 34 THEN 'Early Career Adults'
-        WHEN age BETWEEN 35 AND 44 THEN 'Mid-Career Professionals'
-        WHEN age BETWEEN 45 AND 54 THEN 'Experienced Adults'
-        WHEN age >= 55 THEN 'Seniors'
-        ELSE 'Unknown Age Group'
-    END AS age_group
-    FROM customers
-),
-customer_activity AS (
-    SELECT a.age_group, s.customer_id, 
-           MAX(s.sale_date) AS last_purchase_date,
-           MIN(s.sale_date) AS first_purchase_date,
-           COUNT(s.sale_id) AS total_purchases
-    FROM age_groups a LEFT JOIN sales s ON a.customer_id = s.customer_id
-    GROUP BY a.age_group, s.customer_id
-)
-SELECT a.age_group, COUNT(ca.customer_id) AS total_customers,
-       SUM(CASE WHEN ca.last_purchase_date >= DATE('now', '-6 months') THEN 1 ELSE 0 END) AS active_customers,
-       SUM(CASE WHEN ca.last_purchase_date < DATE('now', '-6 months') OR    ca.last_purchase_date IS NULL THEN 1 ELSE 0 END) AS churned_customers,  
-         ROUND( (CAST(SUM(CASE WHEN ca.last_purchase_date >= DATE('now', '-6 months') THEN 1 ELSE 0 END) AS FLOAT) / COUNT(ca.customer_id)) * 100, 2) AS retention_rate,
-         ROUND( (CAST(SUM(CASE WHEN ca.last_purchase_date < DATE('now', '-6 months') OR ca.last_purchase_date IS NULL THEN 1 ELSE 0 END) AS FLOAT) / COUNT(ca.customer_id)) * 100, 2) AS churn_rate
-FROM age_groups a  JOIN customer_activity ca ON a.age_group = ca.age_group
-GROUP BY a.age_group
-ORDER BY a.age_group
-"""
-query_df = pd.read_sql_query(query, connection)
-print("\n\nThe following depicts customer retention rates and churn rates over the past year by age group:\n", query_df)
+# query = """
+# WITH age_groups AS (
+#     SELECT customer_id, name, CASE
+#         WHEN age BETWEEN 18 AND 24 THEN 'Young Adults'
+#         WHEN age BETWEEN 25 AND 34 THEN 'Early Career Adults'
+#         WHEN age BETWEEN 35 AND 44 THEN 'Mid-Career Professionals'
+#         WHEN age BETWEEN 45 AND 54 THEN 'Experienced Adults'
+#         WHEN age >= 55 THEN 'Seniors'
+#         ELSE 'Unknown Age Group'
+#     END AS age_group
+#     FROM customers
+# ),
+# customer_activity AS (
+#     SELECT a.age_group, s.customer_id, 
+#            MAX(s.sale_date) AS last_purchase_date,
+#            MIN(s.sale_date) AS first_purchase_date,
+#            COUNT(s.sale_id) AS total_purchases
+#     FROM age_groups a LEFT JOIN sales s ON a.customer_id = s.customer_id
+#     GROUP BY a.age_group, s.customer_id
+# )
+# SELECT a.age_group, COUNT(ca.customer_id) AS total_customers,
+#        SUM(CASE WHEN ca.last_purchase_date >= DATE('now', '-6 months') THEN 1 ELSE 0 END) AS active_customers,
+#        SUM(CASE WHEN ca.last_purchase_date < DATE('now', '-6 months') OR    ca.last_purchase_date IS NULL THEN 1 ELSE 0 END) AS churned_customers,  
+#          ROUND( (CAST(SUM(CASE WHEN ca.last_purchase_date >= DATE('now', '-6 months') THEN 1 ELSE 0 END) AS FLOAT) / COUNT(ca.customer_id)) * 100, 2) AS retention_rate,
+#          ROUND( (CAST(SUM(CASE WHEN ca.last_purchase_date < DATE('now', '-6 months') OR ca.last_purchase_date IS NULL THEN 1 ELSE 0 END) AS FLOAT) / COUNT(ca.customer_id)) * 100, 2) AS churn_rate
+# FROM age_groups a  JOIN customer_activity ca ON a.age_group = ca.age_group
+# GROUP BY a.age_group
+# ORDER BY a.age_group
+# """
+# query_df = pd.read_sql_query(query, connection)
+# print("\n\nThe following depicts customer retention rates and churn rates over the past year by age group:\n", query_df)
+
+
+
+#Time for product analysis. Look at product performance across different stores and regions, and check if there are seasonal or trending products.
+
+#1.
+#How are products performing across different stores and regions? Which products are the most popular across all stores in terms of number of units sold and total revenue generated?
+# query = """
+# WITH product_sales AS (
+#     SELECT s.store_id, p.category, SUM(s.quantity) AS total_units_sold, SUM(s.quantity * p.price) AS total_revenue
+#     FROM sales s INNER JOIN products p ON s.product_id = p.product_id
+#     GROUP BY s.store_id, p.category
+# )
+# SELECT s.store_name, ps.category, ps.total_units_sold, ps.total_revenue
+# FROM product_sales ps INNER JOIN stores s ON ps.store_id = s.store_id
+# WHERE s.store_name = 'BBQ Lentil Chips'
+# ORDER BY s.store_name,ps.total_units_sold DESC, ps.total_revenue DESC
+# """ 
+# query_df = pd.read_sql_query(query, connection)
+# print("\n\nThe following depicts which products are the most popular across all stores in terms of number of units sold and total revenue generated:\n", query_df)
+
+
+#2.
+#What trends are observed for products in terms of sales over the past year? Are there any seasonal products that are more popular during certain times of the year?
+# query = """
+# SELECT p.category,strftime('%Y-%m', s.sale_date) AS month_year, SUM(s.quantity) AS total_units_sold, SUM(s.quantity * p.price) AS total_revenue
+# FROM sales s INNER JOIN products p ON s.product_id = p.product_id
+# GROUP BY month_year, p.category
+# ORDER BY p.category, month_year
+# """
+# query_df = pd.read_sql_query(query, connection)
+# print("\n\nThe following depicts the products in low demand across all stores, as well as the number of units sold and total revenue generated:\n", query_df)
+
+
+#Come back to this later to analyze the products in low demand across all stores, as well as the number of units sold and total revenue generated.
+
+
+
+#Analysis of stores and regional performance. We'll take a look at which stores consistently perform well, and if some products are more popular in certain regions.
+
+#1.
+#Which stores consistently perform well in terms of total revenue, number of customers, and number of products sold?
+# query = """
+# SELECT st.store_name, SUM(s.quantity * p.price) AS total_revenue, COUNT(DISTINCT s.customer_id) AS num_customers, COUNT(DISTINCT s.product_id) AS num_distinct_products
+# FROM sales s INNER JOIN stores st ON s.store_id = st.store_id INNER JOIN products p ON s.product_id = p.product_id
+# GROUP BY st.store_name
+# ORDER BY total_revenue DESC, num_customers DESC, num_distinct_products DESC
+# """
+# query_df = pd.read_sql_query(query, connection)
+# print("\n\nThe following depicts which stores consistently perform well in terms of total revenue, number of customers, and number of products sold:\n", query_df)
+
+#2.
+#Are there any products that are more popular in certain regions? If so, which products are they and what are the reasons for this?
+# query = """
+# SELECT p.category,st.region, SUM(s.quantity) AS total_units_sold, SUM(s.quantity * p.price) AS total_revenue
+# FROM sales s INNER JOIN stores st ON s.store_id = st.store_id INNER JOIN products p ON s.product_id = p.product_id
+# GROUP BY p.category,st.region 
+# ORDER BY p.category,st.region, total_units_sold DESC, total_revenue DESC
+# """
+# query_df = pd.read_sql_query(query, connection)
+# print("\n\nThe following depicts which products are more popular in certain regions:\n", query_df)\
+
+#3.
+#What are the most popular products in each region, and how do they compare to other regions? Same query as above, but with a different ordering.
+# query = """
+# SELECT st.region, p.category, SUM(s.quantity) AS total_units_sold, SUM(s.quantity * p.price) AS total_revenue
+# FROM sales s INNER JOIN stores st ON s.store_id = st.store_id INNER JOIN products p ON s.product_id = p.product_id
+# GROUP BY st.region, p.category    
+# ORDER BY st.region, p.category, total_units_sold DESC, total_revenue DESC
+# """
+# query_df = pd.read_sql_query(query, connection)
+# print("\n\nThe following depicts the most popular products in each region, and how they compare to other regions:\n", query_df)
+
+
+#Let's analyze the inventory data. We'll look at the stock levels of products catgories in general, and check if there are any products that are consistently out of stock.
+#1.
+#What are the stock levels of products across different stores? Are there any products that are consistently out of stock?
+# query = """
