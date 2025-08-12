@@ -1,4 +1,6 @@
 import sqlite3
+import seaborn as sns
+import matplotlib.pyplot as plt
 import pandas as pd
 
 connection = sqlite3.connect('retail_sales.db')
@@ -129,6 +131,16 @@ for name in ['customers', 'inventory', 'products','sales','stores']:
 # """
 # query_df = pd.read_sql_query(query, connection)
 # print("The following depicts the total monthly revenue over tthe course of the past year for each of the locations:\n", query_df)
+# print("Now below is the visualization of the total monthly revenue over the course of the past year for each of the locations:")
+# sns.lineplot(data=query_df, x='month_year', y='total_revenue', hue='region', marker='o')
+# plt.title('Total Monthly Revenue by Location')
+# plt.xlabel('Month/Year')
+# plt.ylabel('Total Revenue')
+# plt.xticks(rotation=45)
+# plt.grid(True)
+# plt.legend(title='Region', fontsize='small')
+# plt.tight_layout()
+# plt.show()
 
 
 
@@ -162,6 +174,16 @@ for name in ['customers', 'inventory', 'products','sales','stores']:
 # """
 # query_df = pd.read_sql_query(query, connection)
 # print("The following depicts the cumulative monthly revenue for each of the locations:\n", query_df)
+# print("Now below is the visualization of the cumulative monthly revenue for each of the locations:")
+# sns.lineplot(data=query_df, x='year_month', y='cumulative_revenue', hue='region', marker='o')
+# plt.title('Cumulative Monthly Revenue by Location')
+# plt.xlabel('Month/Year')
+# plt.ylabel('Cumulative Revenue')
+# plt.xticks(rotation=45)
+# plt.grid(True)
+# plt.legend(title='Region', fontsize='small')
+# plt.tight_layout()
+# plt.show()
 
 
 
@@ -172,16 +194,27 @@ for name in ['customers', 'inventory', 'products','sales','stores']:
 #Total number of sales to customers in the past twelve months
 # query = """
 # WITH past_sales AS(
-#     SELECT c.customer_id, COUNT(s.sale_id) AS total_purchases
+#     SELECT strftime('%Y-%m', s.sale_date) AS year_month, COUNT(DISTINCT c.customer_id) AS number_of_customers, COUNT(s.sale_id) AS total_purchases
 #     FROM sales s RIGHT JOIN customers c ON s.customer_id = c.customer_id
-#     GROUP BY c.customer_id
+#     GROUP BY year_month
+#     ORDER BY year_month, total_purchases DESC
 # )
 # SELECT * FROM past_sales
-# ORDER BY total_purchases DESC
 # """
 # query_df = pd.read_sql_query(query, connection)
 # total_customers = query_df
 # print("Total number of sales to customers in the past twelve months\n", total_customers)
+# # Uncomment the following lines to visualize the total number of sales to customers in the past twelve months
+# ax = sns.lineplot(data=total_customers, x='year_month', y='total_purchases', marker='o', label='Total purchases')
+# sns.lineplot(data=total_customers, x='year_month', y='number_of_customers', marker='o', label='Number of unique customers')
+# ax.set_title('Monthly Purchases vs Unique Customers')
+# ax.set_xlabel('Month/Year')
+# ax.set_ylabel('Count')
+# plt.xticks(rotation=45)
+# plt.legend(title='Series', fontsize=8, title_fontsize=9, loc='center left', bbox_to_anchor=(1, 0.5))
+# plt.tight_layout()
+# plt.grid(True)
+# plt.show()
 
 
 #2.
@@ -392,12 +425,12 @@ for name in ['customers', 'inventory', 'products','sales','stores']:
 #Use the above to visualize which region is having the highest stock levels. In this case, Central doesn;t seem to be performing too good to the others.
 
 #3. From the query above, we can see a trend in the region for which has the highest inventory updates. Let's group by region ans see which one is lacking behind.
-query = """
-SELECT st.region, COUNT(i.last_updated) AS inventory_updates, AVG(i.stock_quantity) AS avg_stock_quantity,COUNT( DISTINCT st.store_id) AS number_of_stores
-FROM inventory i INNER JOIN stores st ON i.store_id = st.store_id
-GROUP BY st.region
-ORDER BY inventory_updates DESC, avg_stock_quantity DESC
-"""
-query_df = pd.read_sql_query(query, connection)
-print("\n\nThe following depicts the inventory updates for each region, and the regions that have a higher frequency of inventory updates:\n", query_df)
+# query = """
+# SELECT st.region, COUNT(i.last_updated) AS inventory_updates, AVG(i.stock_quantity) AS avg_stock_quantity,COUNT( DISTINCT st.store_id) AS number_of_stores
+# FROM inventory i INNER JOIN stores st ON i.store_id = st.store_id
+# GROUP BY st.region
+# ORDER BY inventory_updates DESC, avg_stock_quantity DESC
+# """
+# query_df = pd.read_sql_query(query, connection)
+# print("\n\nThe following depicts the inventory updates for each region, and the regions that have a higher frequency of inventory updates:\n", query_df)
 #Helps us to see that inventory updates are hightly correlative with the number of stores in that region. The more stores, the more inventory updates.
