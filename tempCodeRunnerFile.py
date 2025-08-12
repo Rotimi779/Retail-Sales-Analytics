@@ -1,1 +1,1 @@
-ROUP BY store_id, product_id
+p.category, strftime('%Y-%m', i.last_updated) AS year_month,SUM(i.stock

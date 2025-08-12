@@ -370,5 +370,34 @@ for name in ['customers', 'inventory', 'products','sales','stores']:
 
 #Let's analyze the inventory data. We'll look at the stock levels of products catgories in general, and check if there are any products that are consistently out of stock.
 #1.
-#What are the stock levels of products across different stores? Are there any products that are consistently out of stock?
+#What are the general stock levels of product categories? Are there any products that are consistently out of stock?
 # query = """
+# SELECT p.category, strftime('%Y-%m', i.last_updated) AS year_month,SUM(i.stock_quantity) AS total_stock
+# FROM inventory i INNER JOIN products p ON i.product_id = p.product_id
+# GROUP BY p.category, year_month
+# """
+# query_df = pd.read_sql_query(query, connection)
+# print("\n\nThe following depicts the stock levels of products across different product categories, and will let us see a trend in store quantities:\n", query_df) 
+
+#2.
+#How frequently is the inventory updated for each store? Are there any stores that have a higher frequency of inventory updates?
+# query = """
+# SELECT st.store_name,st.region, COUNT(i.last_updated) AS inventory_updates, AVG(i.stock_quantity) AS avg_stock_quantity
+# FROM inventory i INNER JOIN stores st ON i.store_id = st.store_id
+# GROUP BY st.store_name
+# ORDER BY inventory_updates DESC, avg_stock_quantity DESC
+# """
+# query_df = pd.read_sql_query(query, connection)
+# print("\n\nThe following depicts how frequently the inventory is updated for each store, and the stores that have a higher frequency of inventory updates:\n", query_df)
+#Use the above to visualize which region is having the highest stock levels. In this case, Central doesn;t seem to be performing too good to the others.
+
+#3. From the query above, we can see a trend in the region for which has the highest inventory updates. Let's group by region ans see which one is lacking behind.
+query = """
+SELECT st.region, COUNT(i.last_updated) AS inventory_updates, AVG(i.stock_quantity) AS avg_stock_quantity,COUNT( DISTINCT st.store_id) AS number_of_stores
+FROM inventory i INNER JOIN stores st ON i.store_id = st.store_id
+GROUP BY st.region
+ORDER BY inventory_updates DESC, avg_stock_quantity DESC
+"""
+query_df = pd.read_sql_query(query, connection)
+print("\n\nThe following depicts the inventory updates for each region, and the regions that have a higher frequency of inventory updates:\n", query_df)
+#Helps us to see that inventory updates are hightly correlative with the number of stores in that region. The more stores, the more inventory updates.
