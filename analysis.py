@@ -219,18 +219,28 @@ for name in ['customers', 'inventory', 'products','sales','stores']:
 
 #2.
 #Get the average purchase value for each customer and how many items they have purchased
-# query = """
-# WITH customer_purchases AS (
-#     SELECT s.customer_id, AVG(s.quantity * p.price) AS avg_purchase_value,COUNT(s.sale_id) AS number_of_purchases
-#     FROM sales s INNER JOIN products p ON p.product_id = s.product_id
-#     GROUP BY s.customer_id
-# )
-# SELECT c.name, COALESCE(cp.avg_purchase_value,0) AS average_purchase_value, COALESCE(cp.number_of_purchases,0) AS number_of_purchases
-# FROM customer_purchases cp RIGHT JOIN customers c ON cp.customer_id = c.customer_id
-# ORDER BY cp.avg_purchase_value DESC, cp.number_of_purchases DESC
-# """
-# query_df = pd.read_sql_query(query, connection)
-# print("\n\nThe following depicts the average purchase value and number of purchases for each customer:\n", query_df)
+query = """
+WITH customer_purchases AS (
+    SELECT s.customer_id, AVG(s.quantity * p.price) AS avg_purchase_value,COUNT(s.sale_id) AS number_of_purchases
+    FROM sales s INNER JOIN products p ON p.product_id = s.product_id
+    GROUP BY s.customer_id
+)
+SELECT c.name, COALESCE(cp.avg_purchase_value,0) AS average_purchase_value, COALESCE(cp.number_of_purchases,0) AS number_of_purchases
+FROM customers c LEFT JOIN customer_purchases cp ON cp.customer_id = c.customer_id
+ORDER BY number_of_purchases DESC, avg_purchase_value DESC
+
+"""
+query_df = pd.read_sql_query(query, connection)
+print("\n\nThe following depicts the average purchase value and number of purchases for each customer:\n", query_df)
+print("Now below is the visualization of the average purchase value and number of purchases for each customer:")
+sns.scatterplot(data=query_df, x='number_of_purchases', y='average_purchase_value')
+plt.title('Average Purchase Value vs Number of Purchases Per Customer') 
+plt.xlabel('Number of Purchases')
+plt.ylabel('Average Purchase Value')
+plt.xticks(rotation=45)
+plt.tight_layout()
+plt.grid(True)
+plt.show()
 
 
 #3.
