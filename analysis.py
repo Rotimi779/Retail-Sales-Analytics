@@ -219,56 +219,65 @@ for name in ['customers', 'inventory', 'products','sales','stores']:
 
 #2.
 #Get the average purchase value for each customer and how many items they have purchased
-query = """
-WITH customer_purchases AS (
-    SELECT s.customer_id, AVG(s.quantity * p.price) AS avg_purchase_value,COUNT(s.sale_id) AS number_of_purchases
-    FROM sales s INNER JOIN products p ON p.product_id = s.product_id
-    GROUP BY s.customer_id
-)
-SELECT c.name, COALESCE(cp.avg_purchase_value,0) AS average_purchase_value, COALESCE(cp.number_of_purchases,0) AS number_of_purchases
-FROM customers c LEFT JOIN customer_purchases cp ON cp.customer_id = c.customer_id
-ORDER BY number_of_purchases DESC, avg_purchase_value DESC
+# query = """
+# WITH customer_purchases AS (
+#     SELECT s.customer_id, AVG(s.quantity * p.price) AS avg_purchase_value,COUNT(s.sale_id) AS number_of_purchases
+#     FROM sales s INNER JOIN products p ON p.product_id = s.product_id
+#     GROUP BY s.customer_id
+# )
+# SELECT c.name, COALESCE(cp.avg_purchase_value,0) AS average_purchase_value, COALESCE(cp.number_of_purchases,0) AS number_of_purchases
+# FROM customers c LEFT JOIN customer_purchases cp ON cp.customer_id = c.customer_id
+# ORDER BY number_of_purchases DESC, avg_purchase_value DESC
 
-"""
-query_df = pd.read_sql_query(query, connection)
-print("\n\nThe following depicts the average purchase value and number of purchases for each customer:\n", query_df)
-print("Now below is the visualization of the average purchase value and number of purchases for each customer:")
-sns.scatterplot(data=query_df, x='number_of_purchases', y='average_purchase_value')
-plt.title('Average Purchase Value vs Number of Purchases Per Customer') 
-plt.xlabel('Number of Purchases')
-plt.ylabel('Average Purchase Value')
-plt.xticks(rotation=45)
-plt.tight_layout()
-plt.grid(True)
-plt.show()
+# """
+# query_df = pd.read_sql_query(query, connection)
+# print("\n\nThe following depicts the average purchase value and number of purchases for each customer:\n", query_df)
+# print("Now below is the visualization of the average purchase value and number of purchases for each customer:")
+# sns.scatterplot(data=query_df, x='number_of_purchases', y='average_purchase_value')
+# plt.title('Average Purchase Value vs Number of Purchases Per Customer') 
+# plt.xlabel('Number of Purchases')
+# plt.ylabel('Average Purchase Value')
+# plt.xticks(rotation=45)
+# plt.tight_layout()
+# plt.grid(True)
+# plt.show()
 
 
 #3.
 #Which age groups spend the most money
-# query = """
-# WITH age_groups AS (
-#     SELECT customer_id, name, CASE
-#         WHEN age BETWEEN 18 AND 24 THEN 'Young Adults'
-#         WHEN age BETWEEN 25 AND 34 THEN 'Early Career Adults'
-#         WHEN age BETWEEN 35 AND 44 THEN 'Mid-Career Professionals'
-#         WHEN age BETWEEN 45 AND 54 THEN 'Experienced Adults'
-#         WHEN age >= 55 THEN 'Seniors'
-#         ELSE 'Unknown Age Group'
-#     END AS age_group
-#     FROM customers
-# ),
-# sales_total AS(
-#     SELECT s.customer_id, SUM(s.quantity * p.price) AS total_spent
-#     FROM sales s INNER JOIN products p ON s.product_id = p.product_id
-#     GROUP BY s.customer_id
-# )
-# SELECT a.age_group, SUM(s.total_spent) AS total_spent
-# FROM age_groups a INNER JOIN sales_total s ON a.customer_id = s.customer_id
-# GROUP BY a.age_group
-# ORDER BY total_spent DESC
-# """
-# query_df = pd.read_sql_query(query, connection)
-# print("\n\nThe following depicts which age groups spend the most money and what they usually buy:\n", query_df)
+query = """
+WITH age_groups AS (
+    SELECT customer_id, name, CASE
+        WHEN age BETWEEN 18 AND 24 THEN 'Young Adults'
+        WHEN age BETWEEN 25 AND 34 THEN 'Early Career Adults'
+        WHEN age BETWEEN 35 AND 44 THEN 'Mid-Career Professionals'
+        WHEN age BETWEEN 45 AND 54 THEN 'Experienced Adults'
+        WHEN age >= 55 THEN 'Seniors'
+        ELSE 'Unknown Age Group'
+    END AS age_group
+    FROM customers
+),
+sales_total AS(
+    SELECT s.customer_id, SUM(s.quantity * p.price) AS total_spent
+    FROM sales s INNER JOIN products p ON s.product_id = p.product_id
+    GROUP BY s.customer_id
+)
+SELECT a.age_group, SUM(s.total_spent) AS total_spent
+FROM age_groups a INNER JOIN sales_total s ON a.customer_id = s.customer_id
+GROUP BY a.age_group
+ORDER BY total_spent DESC
+"""
+query_df = pd.read_sql_query(query, connection)
+print("\n\nThe following depicts which age groups spend the most money and what they usually buy:\n", query_df)
+# Uncomment the following lines to visualize the total spending by age group
+sns.barplot(data=query_df, x='age_group', y='total_spent')
+plt.title('Total Spending by Age Group')
+plt.xlabel('Age Group')
+plt.ylabel('Total Spent')
+plt.xticks(rotation=45)
+plt.tight_layout()
+plt.grid(True)
+plt.show()
 
 #4.
 #What are the most popular products for each age group, and which catgeory does this product belong to? Is there a better way of showing this data?
