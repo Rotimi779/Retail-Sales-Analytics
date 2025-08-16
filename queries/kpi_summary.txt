@@ -1,0 +1,4 @@
+SELECT strftime('%Y-%m',s.sale_date) AS month_year, SUM(p.price * s.quantity) AS total_revenue, COUNT(DISTINCT s.sale_id) AS total_orders, SUM(s.quantity) AS units_sold, ROUND(SUM(p.price * s.quantity) / COUNT(DISTINCT s.sale_id),2) AS average_order_value
+FROM sales s JOIN products p ON s.product_id = p.product_id
+GROUP BY month_year 
+ORDER BY  month_year

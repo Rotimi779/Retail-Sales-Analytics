@@ -1,19 +1,5 @@
-import sqlite3
-import seaborn as sns
-import matplotlib.pyplot as plt
-import pandas as pd
 
-connection = sqlite3.connect('retail_sales.db')
 
-for name in ['customers', 'inventory', 'products','sales','stores']:
-    df = pd.read_csv(f'{name}.csv')
-    if name in ['sales', 'inventory']:
-        # Convert date columns to datetime format
-        if 'last_updated' in df.columns:
-            df['last_updated'] = pd.to_datetime(df['last_updated'], errors='coerce').dt.date
-        if 'sale_date' in df.columns:
-            df['sale_date'] = pd.to_datetime(df['sale_date'], errors='coerce').dt.date
-    df.to_sql(name, connection, if_exists='replace', index=False)
 
 #Run some queries to analyze the data for customers
 #Check which customers have made the most purchases(or bought the most units OR visited the most stores OR bought the most distinct units)
