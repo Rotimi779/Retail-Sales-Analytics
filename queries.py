@@ -37,14 +37,33 @@ for name in ['customers', 'inventory', 'products','sales','stores']:
 # print("Below is the categorical revenue\n", df_revenue)
 
 
-query = """
-SELECT p.category, SUM(p.price * s.quantity) AS total_revenue,st.region
+# query = """
+# SELECT p.category, SUM(p.price * s.quantity) AS total_revenue,st.region
+# FROM stores st JOIN sales s ON st.store_id = s.store_id JOIN products p ON s.product_id = p.product_id
+# GROUP BY p.category,st.region
+# ORDER BY total_revenue
+# """
+# df_revenue = pd.read_sql_query(query, connection)
+# print("Below is the categorical revenue\n", df_revenue)
+
+# query ="""
+# SELECT st.store_name,st.region,SUM(p.price * s.quantity) AS total_revenue,COUNT(s.sale_id) AS total_orders,SUM(s.quantity) AS units_sold
+# FROM stores st JOIN sales s ON st.store_id = s.store_id JOIN products p ON s.product_id = p.product_id
+# GROUP BY st.store_id
+# ORDER BY total_revenue DESC
+# """
+# df_revenue = pd.read_sql_query(query, connection)
+# print("Below is store data\n", df_revenue)
+
+query ="""
+SELECT strftime('%Y-%m',s.sale_date) AS month_year, st.region,SUM(p.price * s.quantity) AS total_revenue,COUNT(s.sale_id) AS total_orders,SUM(s.quantity) AS units_sold
 FROM stores st JOIN sales s ON st.store_id = s.store_id JOIN products p ON s.product_id = p.product_id
-GROUP BY p.category,st.region
-ORDER BY total_revenue
+WHERE st.store_name = 'Travel Orthopedic Pillow'
+GROUP BY month_year
+ORDER BY month_year,total_revenue DESC
 """
 df_revenue = pd.read_sql_query(query, connection)
-print("Below is the categorical revenue\n", df_revenue)
+print("Below is revenue trend for the selected store\n", df_revenue)
 
 
 

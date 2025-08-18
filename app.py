@@ -14,7 +14,7 @@ st.set_page_config(page_title="Data Analysis Dashboard", layout="wide")
 st.title("Data Analysis Dashboard")
 st.subheader('Monthly Key Performance Indicators')
 tab1,tab2,tab3,tab4 = st.tabs(["Revenue","Total Orders", "Units sold", "Average Order Value"])
-kpi_df = pd.read_sql_query(open("queries/kpi_summary.txt").read(), conn)
+kpi_df = pd.read_sql_query(open("queries/main_kpi_summary.txt").read(), conn)
 masking_dict = {"total_revenue": "Revenue", "total_orders":"Orders", "units_sold": "Units Sold", "average_order_value":"Average Order Value"}
 
 #Key Performance Indicator Graphing
@@ -114,7 +114,7 @@ with tab4:
 
 
 #Start working on Mix Tab(Category and region insights)
-
+st.subheader("Category and Region Insights")
 cat_reg_df = pd.read_sql_query(open("queries/top_category.txt").read(), conn)
 def make_pareto_chart(df: pd.DataFrame, category_col: str = "category", value_col: str = "revenue", cutoff: float = 0.80, title: str = "Pareto: Revenue by Category"):
     d = df[[category_col, value_col]].dropna().copy()
@@ -269,10 +269,48 @@ fig_stack.update_yaxes(tickprefix="$", separatethousands=True, title_text="Reven
 st.plotly_chart(fig_stack, use_container_width=True)
 
 rev_str = f"${top_region_revenue:,.0f}"
-#Correct the dollar sign here
-cat_rev_str = f"{top_category_revenue:,.0f}"
+#Correct the dollar sign here. Make sure you fix this bug
+cat_rev_str =  f"{top_category_revenue:,.0f}"
 
 st.info(
-    f"**{top_region}** is the top region with **{rev_str}** in revenue. "
-    f"Within **{top_region}**, **{top_category_in_region}** leads at **{cat_rev_str}**."
+    f"**{top_region}** is the top region with **{rev_str}** in revenue. Within **{top_region}**, **{top_category_in_region}** leads at **{cat_rev_str}**."
 )
+
+#Store performance
+st.subheader("Store Performance")
+col1, col2 = st.columns([1,2])
+all_store_df = pd.read_sql_query(open("queries/all_stores_performance.txt").read(), conn)
+with col1:
+    st.dataframe(all_store_df)
+with col2:
+    st.write("Select which store you want to look at.")
+    selected_store = st.selectbox("Choose a store", options=all_store_df['store_name'].to_list())
+
+    kpi_tab, products_tab = st.tabs(["KPI Trends", "Top Products"])
+
+    with kpi_tab:
+        kpi_store_df = pd.read_sql_query(open("queries/all_stores_performance.txt").read(), conn)
+        # KPI cards (last month values)
+        if not kpi_store_df.empty:
+            last = kpi_store_df.iloc[-1]
+            c1, c2, c3, c4 = st.columns(4)
+            c1.metric("Revenue (last)", f"${last['total_revenue']:,.0f}")
+            c2.metric("Orders (last)", f"{int(last['total_orders']):,}")
+            c3.metric("Units (last)", f"{int(last['units_sold']):,}")
+            c4.metric("AOV (last)", f"${last['average_order_value']:,.0f}")
+
+            # One selector to switch the trend metric (reuses your make_kpi_line)
+            metric_map = {
+                "Revenue": "total_revenue",
+                "Orders": "total_orders",
+                "Units Sold": "units_sold",
+                "Average Order Value": "average_order_value",
+            }
+            chosen_metric_label = st.selectbox("Trend metric", list(metric_map.keys()))
+            chosen_col = metric_map[chosen_metric_label]
+
+            fig = make_kpi_line(kpi_store_df, chosen_col, use_moving_average=True)
+            st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.info("No data for this store yet.")
+    
