@@ -205,3 +205,74 @@ with mix_tab:
     )
 
 #Add region x category heatmap to show how each region's categories are distributed
+rc_df = pd.read_sql_query(open("queries/region_category_heatmap.txt").read(), conn)
+
+# Total revenue by region
+region_totals = rc_df.groupby("region", as_index=False)["total_revenue"].sum()
+top_region_row = region_totals.loc[region_totals["total_revenue"].idxmax()]
+top_region = top_region_row["region"]
+top_region_revenue = top_region_row["total_revenue"]
+
+# Top category within the top region
+top_cat_row = (
+    rc_df[rc_df["region"] == top_region]
+    .groupby("category", as_index=False)["total_revenue"].sum()
+    .sort_values("total_revenue", ascending=False)
+    .iloc[0]
+)
+top_category_in_region = top_cat_row["category"]
+top_category_revenue = top_cat_row["total_revenue"]
+
+fig_tree = px.treemap(
+    rc_df,
+    path=["region", "category"],   # hierarchy
+    values="total_revenue",
+    title="Revenue by Region and Category",
+)
+fig_tree.update_traces(
+    hovertemplate=(
+        "Path: %{label}<br>"
+        "Revenue: $%{value:,.0f}<extra></extra>"
+    )
+)
+fig_tree.update_layout(
+    template="plotly_white",
+    margin=dict(l=10, r=10, t=80, b=10),
+    title=dict(x=0.5, xanchor="center", yanchor="top", pad=dict(t=20))
+)
+st.plotly_chart(fig_tree, use_container_width=True)
+
+# Sort regions by total revenue (descending)
+region_order = (
+    region_totals.sort_values("total_revenue", ascending=False)["region"].tolist()
+)
+
+fig_stack = px.bar(
+    rc_df,
+    x="region",
+    y="total_revenue",
+    color="category",
+    title="Which Regions Make the Most (and What’s Driving It)",
+)
+fig_stack.update_traces(
+    hovertemplate="%{x}<br>%{fullData.name}: $%{y:,.0f}<extra></extra>"
+)
+fig_stack.update_layout(
+    barmode="stack",
+    template="plotly_white",
+    margin=dict(l=10, r=10, t=80, b=10),
+    title=dict(x=0.5, xanchor="center", yanchor="top", pad=dict(t=20)),
+    legend_title_text="Category",
+)
+fig_stack.update_xaxes(categoryorder="array", categoryarray=region_order)
+fig_stack.update_yaxes(tickprefix="$", separatethousands=True, title_text="Revenue")
+st.plotly_chart(fig_stack, use_container_width=True)
+
+rev_str = f"${top_region_revenue:,.0f}"
+#Correct the dollar sign here
+cat_rev_str = f"{top_category_revenue:,.0f}"
+
+st.info(
+    f"**{top_region}** is the top region with **{rev_str}** in revenue. "
+    f"Within **{top_region}**, **{top_category_in_region}** leads at **{cat_rev_str}**."
+)
