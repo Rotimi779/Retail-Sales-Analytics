@@ -289,7 +289,7 @@ with col2:
     kpi_tab, products_tab = st.tabs(["KPI Trends", "Top Products"])
 
     with kpi_tab:
-        kpi_store_df = pd.read_sql_query(open("queries/all_stores_performance.txt").read(), conn)
+        kpi_store_df = pd.read_sql_query(open("queries/store_kpi_summary.txt").read(), conn,params=(selected_store,))
         # KPI cards (last month values)
         if not kpi_store_df.empty:
             last = kpi_store_df.iloc[-1]
@@ -313,4 +313,78 @@ with col2:
             st.plotly_chart(fig, use_container_width=True)
         else:
             st.info("No data for this store yet.")
+    
+    with products_tab:
+        option_select = st.selectbox("Select a chart to view",options = ["Top Categories","Top Products"])
+        print("2cw")
+        if option_select == "Top Categories":
+            cat_df = pd.read_sql_query(open("queries/all_stores_category.txt").read(), conn, params=(selected_store,))
+            if not cat_df.empty:
+                # Sort for horizontal bar & compute share
+                cat_df = cat_df.sort_values("revenue", ascending=True)
+                total_rev = cat_df["revenue"].sum()
+                cat_df["share"] = (cat_df["revenue"] / total_rev).fillna(0)
+
+                fig_cat = px.bar(
+                    cat_df,
+                    x="revenue",
+                    y="category",
+                    orientation="h",
+                    title=f"Top Categories by Revenue — {selected_store}",
+                    labels={"revenue": "Revenue", "category": "Category"},
+                    text=cat_df["share"].map(lambda x: f"{x*100:.0f}%"),
+                )
+                fig_cat.update_traces(
+                    hovertemplate="%{y}<br>Revenue: $%{x:,.0f}<br>Share: %{text}<extra></extra>",
+                    textposition="outside",
+                    cliponaxis=False,
+                )
+                fig_cat.update_layout(
+                    template="plotly_white",
+                    margin=dict(l=10, r=10, t=80, b=10),
+                    hovermode="y unified",
+                    xaxis_title="Revenue",
+                    yaxis_title="Category",
+                )
+                fig_cat.update_xaxes(tickprefix="$", separatethousands=True)
+                st.plotly_chart(fig_cat, use_container_width=True)
+
+                # Insight: top category + share
+                top_row = cat_df.sort_values("revenue", ascending=False).iloc[0]
+                st.caption(
+                    f"“{top_row['category']}” leads this store with "
+                    f"${top_row['revenue']:,.0f} ({top_row['share']*100:.0f}% of category revenue)."
+                )
+            else:
+                st.info("No category revenue found for this store.")
+            
+        if option_select == "Top Products":
+            prod_df = pd.read_sql_query(open("queries/all_stores_products.txt").read(),conn,params=(selected_store,))
+            if not prod_df.empty:
+                prod_df = prod_df.sort_values("revenue", ascending=True)  # for horiz bar
+                fig_top = px.bar(
+                    prod_df,
+                    x="revenue",
+                    y="product_name",
+                    orientation="h",
+                    title=f"Top Products by Revenue — {selected_store}",
+                    labels={"revenue": "Revenue", "product_name": "Product"},
+                )
+                fig_top.update_layout(
+                    template="plotly_white",
+                    margin=dict(l=10, r=10, t=80, b=10),
+                    hovermode="y unified",
+                )
+                fig_top.update_xaxes(tickprefix="$", separatethousands=True)
+                st.plotly_chart(fig_top, use_container_width=True)
+
+                # Optional quick insight
+                total_rev = prod_df["revenue"].sum()
+                top3 = prod_df.sort_values("revenue", ascending=False).head(3)
+                share = top3["revenue"].sum() / total_rev if total_rev else 0
+                st.caption(
+                    f"Top 3 products contribute {share*100:.0f}% of store revenue."
+                )
+            else:
+                st.info("No product sales found for this store.")
     

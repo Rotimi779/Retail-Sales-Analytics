@@ -1,0 +1,5 @@
+SELECT p.category AS category, SUM(s.quantity * p.price) AS revenue
+FROM stores st JOIN sales s ON st.store_id = s.store_id JOIN products p ON p.product_id = s.product_id 
+WHERE st.store_name = ?
+GROUP BY p.category
+ORDER BY revenue DESC

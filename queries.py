@@ -55,15 +55,39 @@ for name in ['customers', 'inventory', 'products','sales','stores']:
 # df_revenue = pd.read_sql_query(query, connection)
 # print("Below is store data\n", df_revenue)
 
+# query ="""
+# SELECT strftime('%Y-%m',s.sale_date) AS month_year, st.region,SUM(p.price * s.quantity) AS total_revenue,COUNT(s.sale_id) AS total_orders,SUM(s.quantity) AS units_sold, ROUND(SUM(p.price * s.quantity) / COUNT(DISTINCT s.sale_id),2) AS average_order_value
+# FROM stores st JOIN sales s ON st.store_id = s.store_id JOIN products p ON s.product_id = p.product_id
+# WHERE st.store_name = ?
+# GROUP BY month_year
+# ORDER BY month_year,total_revenue DESC
+# """
+# df_revenue = pd.read_sql_query(query, connection)
+# print("Below is revenue trend for the selected store\n", df_revenue)
+
+
+# query ="""
+# SELECT p.product_name, SUM(s.quantity * p.price) AS revenue
+# FROM stores st JOIN sales s ON st.store_id = s.store_id JOIN products p ON p.product_id = s.product_id 
+# WHERE st.store_name = "Sweet Corn Fritters"
+# GROUP BY p.product_name
+# ORDER BY revenue DESC
+# LIMIT 15
+# """
+# df_revenue = pd.read_sql_query(query, connection)
+# print("Below is product trend for the selected store\n", df_revenue)
+
 query ="""
-SELECT strftime('%Y-%m',s.sale_date) AS month_year, st.region,SUM(p.price * s.quantity) AS total_revenue,COUNT(s.sale_id) AS total_orders,SUM(s.quantity) AS units_sold
-FROM stores st JOIN sales s ON st.store_id = s.store_id JOIN products p ON s.product_id = p.product_id
-WHERE st.store_name = 'Travel Orthopedic Pillow'
-GROUP BY month_year
-ORDER BY month_year,total_revenue DESC
+SELECT p.category AS category, SUM(s.quantity * p.price) AS revenue
+FROM stores st JOIN sales s ON st.store_id = s.store_id JOIN products p ON p.product_id = s.product_id 
+WHERE st.store_name = "Sweet Corn Fritters"
+GROUP BY p.category
+ORDER BY revenue DESC
 """
 df_revenue = pd.read_sql_query(query, connection)
-print("Below is revenue trend for the selected store\n", df_revenue)
+print("Below is category trend for the selected store\n", df_revenue)
+
+
 
 
 

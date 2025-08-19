@@ -1,0 +1,6 @@
+SELECT p.product_name, SUM(s.quantity * p.price) AS revenue
+FROM stores st JOIN sales s ON st.store_id = s.store_id JOIN products p ON p.product_id = s.product_id 
+WHERE st.store_name = ?
+GROUP BY p.product_name
+ORDER BY revenue DESC
+LIMIT 15;
