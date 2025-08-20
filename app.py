@@ -276,6 +276,88 @@ st.info(
     f"**{top_region}** is the top region with **{rev_str}** in revenue. Within **{top_region}**, **{top_category_in_region}** leads at **{cat_rev_str}**."
 )
 
+
+def make_store_trend_fig(
+    df: pd.DataFrame,
+    value_col: str,
+    months_back: int | None = None,
+    title: str | None = None,
+) -> "plotly.graph_objs._figure.Figure":
+    """
+    Build a monthly trend chart for a single store and selected metric/period.
+
+    Args:
+        df: DataFrame with columns ["month_year", <value_col>]
+            - month_year can be string or datetime; will be coerced to month-end datetime.
+        value_col: which KPI to plot (e.g., "total_revenue", "total_orders", "units_sold", "average_order_value")
+        months_back: last N months to include. If None, show all.
+        title: optional chart title (string). If None, uses display name.
+
+    Returns:
+        Plotly Figure
+    """
+    if df.empty or value_col not in df.columns:
+        raise ValueError("Dataframe is empty or value_col not present.")
+
+    d = df[["month_year", value_col]].copy()
+    d["month_year"] = pd.to_datetime(d["month_year"]) + pd.offsets.MonthEnd(0)
+    d = d.sort_values("month_year").reset_index(drop=True)
+
+    # Slice to last N months if requested
+    if months_back is not None and months_back > 0:
+        d = d.iloc[-months_back:].copy()
+
+    display_name = masking_dict.get(value_col, value_col)
+
+    # Currency formatting for revenue/AOV
+    is_currency = value_col in {"total_revenue", "average_order_value"}
+    y_prefix = "$" if is_currency else ""
+    hover_val_fmt = "$%{y:,.0f}" if is_currency else "%{y:,.0f}"
+
+    # Base line chart
+    fig = px.line(
+        d,
+        x="month_year",
+        y=value_col,
+        markers=True,
+        title=title or f"{display_name} Trend",
+        labels={"month_year": "Month", value_col: display_name},
+    )
+
+    # Peak / Low annotations
+    peak = d.loc[d[value_col].idxmax()]
+    low = d.loc[d[value_col].idxmin()]
+    fig.add_annotation(
+        x=peak["month_year"],
+        y=peak[value_col],
+        text=f"Peak: {y_prefix}{peak[value_col]:,.0f}",
+        showarrow=True,
+        arrowhead=2,
+        yshift=10,
+    )
+    fig.add_annotation(
+        x=low["month_year"],
+        y=low[value_col],
+        text=f"Low: {y_prefix}{low[value_col]:,.0f}",
+        showarrow=True,
+        arrowhead=2,
+        yshift=-10,
+    )
+
+    # Styling
+    fig.update_traces(hovertemplate=f"%{{x|%b %Y}}<br>{display_name}: {hover_val_fmt}")
+    fig.update_layout(
+        template="plotly_white",
+        hovermode="x unified",
+        margin=dict(l=10, r=10, t=80, b=10),
+        yaxis_tickprefix=y_prefix,
+        yaxis_separatethousands=True,
+        legend_title_text="",
+    )
+
+    return fig
+
+
 #Store performance
 st.subheader("Store Performance")
 col1, col2 = st.columns([1,2])
@@ -292,14 +374,29 @@ with col2:
         kpi_store_df = pd.read_sql_query(open("queries/store_kpi_summary.txt").read(), conn,params=(selected_store,))
         # KPI cards (last month values)
         if not kpi_store_df.empty:
-            last = kpi_store_df.iloc[-1]
-            c1, c2, c3, c4 = st.columns(4)
-            c1.metric("Revenue (last)", f"${last['total_revenue']:,.0f}")
-            c2.metric("Orders (last)", f"{int(last['total_orders']):,}")
-            c3.metric("Units (last)", f"{int(last['units_sold']):,}")
-            c4.metric("AOV (last)", f"${last['average_order_value']:,.0f}")
+            month_options = {f"Last {i} months": i for i in range(12, 1, -1)}
+            month_options["Last month"] = 1
+            month_options["All time"] = None
+            selected_label = st.selectbox("Select period", list(month_options.keys()))
+            months_back = month_options[selected_label]
 
-            # One selector to switch the trend metric (reuses your make_kpi_line)
+            # Slice for the period (for metrics & plotting)
+            plot_df = kpi_store_df if months_back is None else kpi_store_df.iloc[-months_back:]
+
+            # ----- KPI cards for the selected period -----
+            # Use totals over the selected window; AOV should be weighted: total_revenue / total_orders
+            total_rev = plot_df["total_revenue"].sum()
+            total_orders = plot_df["total_orders"].sum()
+            total_units = plot_df["units_sold"].sum()
+            aov_weighted = (total_rev / total_orders) if total_orders else 0.0
+
+            c1, c2, c3, c4 = st.columns(4)
+            c1.metric("Revenue", f"${total_rev:,.0f}")
+            c2.metric("Orders", f"{int(total_orders):,}")
+            c3.metric("Units", f"{int(total_units):,}")
+            c4.metric("AOV", f"${aov_weighted:,.0f}")
+
+            # ----- Trend metric selector -----
             metric_map = {
                 "Revenue": "total_revenue",
                 "Orders": "total_orders",
@@ -309,7 +406,13 @@ with col2:
             chosen_metric_label = st.selectbox("Trend metric", list(metric_map.keys()))
             chosen_col = metric_map[chosen_metric_label]
 
-            fig = make_kpi_line(kpi_store_df, chosen_col, use_moving_average=True)
+            # ----- Plot the trend for the selected store, period, and metric -----
+            fig = make_store_trend_fig(
+                df=kpi_store_df,
+                value_col=chosen_col,
+                months_back=months_back,  # from your selectbox mapping
+                title=f"{chosen_metric_label} — {selected_store} ({selected_label})",
+            )
             st.plotly_chart(fig, use_container_width=True)
         else:
             st.info("No data for this store yet.")
@@ -387,4 +490,111 @@ with col2:
                 )
             else:
                 st.info("No product sales found for this store.")
+            
     
+    #Work on this box later. Maybe remove it
+    try:
+        # 1) Establish the period start (based on the KPI df you already fetched)
+        #    We use the same selection (months_back / selected_label) the user picked in KPI tab.
+        #    If "All time", we won't filter by date.
+        kpi_store_df["month_year"] = pd.to_datetime(kpi_store_df["month_year"])
+        last_month = kpi_store_df["month_year"].max()
+
+        if months_back is None:
+            period_start = None
+            plot_df = kpi_store_df.copy()
+        else:
+            # include the most recent N months (month aligned)
+            start_dt = (last_month - pd.DateOffset(months=months_back-1)).to_period("M").to_timestamp()
+            period_start = start_dt.strftime("%Y-%m-01")
+            plot_df = kpi_store_df[kpi_store_df["month_year"] >= start_dt].copy()
+
+        # 2) Period totals & quick stats
+        total_rev = float(plot_df["total_revenue"].sum())
+        total_orders = int(plot_df["total_orders"].sum())
+        total_units = int(plot_df["units_sold"].sum())
+        aov_weighted = (total_rev / total_orders) if total_orders else 0.0
+
+        # Best month (by chosen metric, default revenue)
+        best_row = plot_df.loc[plot_df["total_revenue"].idxmax()]
+        best_month_label = best_row["month_year"].strftime("%b %Y")
+        best_rev = float(best_row["total_revenue"])
+
+        # MoM % change (revenue) if we have at least 2 months
+        mom_str = "n/a"
+        if len(plot_df) >= 2:
+            prev_rev = float(plot_df.iloc[-2]["total_revenue"])
+            curr_rev = float(plot_df.iloc[-1]["total_revenue"])
+            mom_str = f"{((curr_rev - prev_rev) / prev_rev * 100):+.1f}%" if prev_rev else "n/a"
+
+        # 3) Top Category & Product during the selected period
+        # Build SQL with optional date filter
+        if period_start:
+            cat_sql = """
+            SELECT p.category AS name, SUM(s.quantity * p.price) AS revenue
+            FROM sales s
+            JOIN products p ON p.product_id = s.product_id
+            JOIN stores   st ON st.store_id   = s.store_id
+            WHERE st.store_name = ? AND s.sale_date >= ?
+            GROUP BY p.category
+            ORDER BY revenue DESC
+            LIMIT 1;
+            """
+            prod_sql = """
+            SELECT p.product_name AS name, SUM(s.quantity * p.price) AS revenue
+            FROM sales s
+            JOIN products p ON p.product_id = s.product_id
+            JOIN stores   st ON st.store_id   = s.store_id
+            WHERE st.store_name = ? AND s.sale_date >= ?
+            GROUP BY p.product_name
+            ORDER BY revenue DESC
+            LIMIT 1;
+            """
+            cat_df_ins = pd.read_sql_query(cat_sql, conn, params=(selected_store, period_start))
+            prod_df_ins = pd.read_sql_query(prod_sql, conn, params=(selected_store, period_start))
+        else:
+            cat_sql = """
+            SELECT p.category AS name, SUM(s.quantity * p.price) AS revenue
+            FROM sales s
+            JOIN products p ON p.product_id = s.product_id
+            JOIN stores   st ON st.store_id   = s.store_id
+            WHERE st.store_name = ?
+            GROUP BY p.category
+            ORDER BY revenue DESC
+            LIMIT 1;
+            """
+            prod_sql = """
+            SELECT p.product_name AS name, SUM(s.quantity * p.price) AS revenue
+            FROM sales s
+            JOIN products p ON p.product_id = s.product_id
+            JOIN stores   st ON st.store_id   = s.store_id
+            WHERE st.store_name = ?
+            GROUP BY p.product_name
+            ORDER BY revenue DESC
+            LIMIT 1;
+            """
+            cat_df_ins = pd.read_sql_query(cat_sql, conn, params=(selected_store,))
+            prod_df_ins = pd.read_sql_query(prod_sql, conn, params=(selected_store,))
+
+        top_cat_name = cat_df_ins.iloc[0]["name"] if not cat_df_ins.empty else "n/a"
+        top_cat_rev  = float(cat_df_ins.iloc[0]["revenue"]) if not cat_df_ins.empty else 0.0
+
+        top_prod_name = prod_df_ins.iloc[0]["name"] if not prod_df_ins.empty else "n/a"
+        top_prod_rev  = float(prod_df_ins.iloc[0]["revenue"]) if not prod_df_ins.empty else 0.0
+
+        # 4) Compose the insight string
+        period_label = selected_label  # e.g., "Last 6 months" or "All time"
+        insight_text = (
+            f"{selected_store} — {period_label}\n"
+            f"Revenue: ${total_rev:,.0f} | Orders: {total_orders:,} | Units: {total_units:,} | AOV: ${aov_weighted:,.0f}\n"
+            f"Best month: {best_month_label} (${best_rev:,.0f}) | MoM change: {mom_str}\n"
+            f"Top category: {top_cat_name} (${top_cat_rev:,.0f}) | Top product: {top_prod_name} (${top_prod_rev:,.0f})"
+        )
+
+        st.info(insight_text)
+    except Exception as e:
+        st.caption(f"Insight box unavailable: {e}")
+    
+
+#Inventory Tab
+st.subheader("Inventory Check")

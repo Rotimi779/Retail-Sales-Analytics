@@ -77,15 +77,44 @@ for name in ['customers', 'inventory', 'products','sales','stores']:
 # df_revenue = pd.read_sql_query(query, connection)
 # print("Below is product trend for the selected store\n", df_revenue)
 
+# query ="""
+# SELECT p.category AS category, SUM(s.quantity * p.price) AS revenue
+# FROM stores st JOIN sales s ON st.store_id = s.store_id JOIN products p ON p.product_id = s.product_id 
+# WHERE st.store_name = "Sweet Corn Fritters"
+# GROUP BY p.category
+# ORDER BY revenue DESC
+# """
+# df_revenue = pd.read_sql_query(query, connection)
+# print("Below is category trend for the selected store\n", df_revenue)
+
 query ="""
-SELECT p.category AS category, SUM(s.quantity * p.price) AS revenue
-FROM stores st JOIN sales s ON st.store_id = s.store_id JOIN products p ON p.product_id = s.product_id 
-WHERE st.store_name = "Sweet Corn Fritters"
-GROUP BY p.category
-ORDER BY revenue DESC
+WITH monthly_sales AS (
+    SELECT s.product_id, strftime('%Y-%m', s.sale_date) AS month, SUM(s.quantity) AS sales_per_month
+    FROM sales s
+    GROUP BY s.product_id, month
+),
+avg_sales AS (
+    SELECT product_id, AVG(sales_per_month) AS avg_monthly_sales
+    FROM monthly_sales
+    GROUP BY product_id
+),
+stock_summary AS
+(
+    SELECT i.product_id, p.product_name, p.category, ROUND(AVG(i.stock_quantity),2) AS avg_stock, ROUND(a.avg_monthly_sales,2) AS avg_monthly_sales
+    FROM inventory i JOIN products p ON p.product_id = i.product_id JOIN avg_sales a ON a.product_id = i.product_id
+    GROUP BY i.product_id, p.product_name, p.category
+)
+SELECT product_id, product_name, category, COALESCE(avg_stock, 0) AS avg_stock, COALESCE(avg_monthly_sales, 0) AS avg_monthly_sales,
+    CASE 
+        WHEN COALESCE(avg_monthly_sales, 0) = 0 THEN NULL
+        ELSE (avg_stock * 1.0 / avg_monthly_sales)
+    END AS stock_coverage
+FROM stock_summary
 """
 df_revenue = pd.read_sql_query(query, connection)
-print("Below is category trend for the selected store\n", df_revenue)
+print("Below is inventory trend\n", df_revenue)
+
+
 
 
 
