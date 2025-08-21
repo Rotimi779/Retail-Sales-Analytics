@@ -14,9 +14,9 @@ stock_summary AS
     FROM inventory i JOIN products p ON p.product_id = i.product_id JOIN avg_sales a ON a.product_id = i.product_id
     GROUP BY i.product_id, p.product_name, p.category
 )
-SELECT  product_name, category, COALESCE(avg_stock, 0) AS avg_stock, COALESCE(avg_monthly_sales, 0) AS avg_monthly_sales,
-    CASE 
-        WHEN COALESCE(avg_monthly_sales, 0) = 0 THEN NULL
-        ELSE (avg_stock * 1.0 / avg_monthly_sales)
-    END AS stock_coverage
+SELECT category,
+    ROUND(AVG(avg_stock),2) AS avg_stock,
+    ROUND(AVG(avg_monthly_sales),2) AS avg_monthly_sales,
+    COUNT(*) AS sku_count
 FROM stock_summary
+GROUP BY category

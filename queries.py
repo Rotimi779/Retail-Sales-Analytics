@@ -6,7 +6,7 @@ import pandas as pd
 connection = sqlite3.connect('retail_sales.db')
 
 for name in ['customers', 'inventory', 'products','sales','stores']:
-    df = pd.read_csv(f'{name}.csv')
+    df = pd.read_csv(f'csv_files/{name}.csv')
     if name in ['sales', 'inventory']:
         # Convert date columns to datetime format
         if 'last_updated' in df.columns:
@@ -114,6 +114,34 @@ FROM stock_summary
 df_revenue = pd.read_sql_query(query, connection)
 print("Below is inventory trend\n", df_revenue)
 
+
+
+query ="""
+WITH monthly_sales AS (
+    SELECT s.product_id, strftime('%Y-%m', s.sale_date) AS month, SUM(s.quantity) AS sales_per_month
+    FROM sales s
+    GROUP BY s.product_id, month
+),
+avg_sales AS (
+    SELECT product_id, AVG(sales_per_month) AS avg_monthly_sales
+    FROM monthly_sales
+    GROUP BY product_id
+),
+stock_summary AS
+(
+    SELECT i.product_id, p.product_name, p.category, ROUND(AVG(i.stock_quantity),2) AS avg_stock, ROUND(a.avg_monthly_sales,2) AS avg_monthly_sales
+    FROM inventory i JOIN products p ON p.product_id = i.product_id JOIN avg_sales a ON a.product_id = i.product_id
+    GROUP BY i.product_id, p.product_name, p.category
+)
+SELECT category,
+    ROUND(AVG(avg_stock),2) AS avg_stock,
+    ROUND(AVG(avg_monthly_sales),2) AS avg_monthly_sales,
+    COUNT(*) AS sku_count
+FROM stock_summary
+GROUP BY category
+"""
+df_revenue = pd.read_sql_query(query, connection)
+print("Below is inventory trend part 2\n", df_revenue)
 
 
 
