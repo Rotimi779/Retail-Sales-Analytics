@@ -74,14 +74,9 @@ with left:
         st.cache_data.clear()  # clear caches so the next call rebuilds
         build_database_if_needed.clear()  # clear build cache specifically
 
-# always ensure DB is in sync with CSVs (cached by signature)
-status = build_database_if_needed(_csv_signature())
 
-st.title("Data Analysis Dashboard")
-st.subheader("Monthly Key Performance Indicators")
 
 masking_dict = {"total_revenue": "Revenue", "total_orders":"Orders", "units_sold": "Units Sold", "average_order_value":"Average Order Value"}
-
 #Key Performance Indicator Graphing
 def make_kpi_line(df: pd.DataFrame, value_col: str, use_moving_average: bool):
     display_name = masking_dict.get(value_col, value_col)
@@ -175,24 +170,6 @@ def make_store_trend_fig(df: pd.DataFrame, value_col: str, months_back: int | No
     )
     return fig
 
-# Main KPIs (use cached run_query)
-tab1, tab2, tab3, tab4 = st.tabs(["Revenue", "Total Orders", "Units sold", "Average Order Value"])
-
-kpi_df = run_query(load_sql("queries/main_kpi_summary.txt"))
-
-with tab1:
-    st.plotly_chart(make_kpi_line(kpi_df, "total_revenue", use_moving_average=True), use_container_width=True)
-with tab2:
-    st.plotly_chart(make_kpi_line(kpi_df, "total_orders", use_moving_average=False), use_container_width=True)
-with tab3:
-    st.plotly_chart(make_kpi_line(kpi_df, "units_sold", use_moving_average=False), use_container_width=True)
-with tab4:
-    st.plotly_chart(make_kpi_line(kpi_df, "average_order_value", use_moving_average=False), use_container_width=True)
-
-# Mix tab (queries now cached)
-st.subheader("Category and Region Insights")
-cat_reg_df = run_query(load_sql("queries/top_category.txt"))
-
 def make_pareto_chart(df: pd.DataFrame, category_col: str = "category", value_col: str = "revenue", cutoff: float = 0.80, title: str = "Pareto: Revenue by Category"):
     d = df[[category_col, value_col]].dropna().copy()
     d = d.groupby(category_col, as_index=False)[value_col].sum()
@@ -263,65 +240,129 @@ def make_pareto_chart(df: pd.DataFrame, category_col: str = "category", value_co
     )
 
     return fig, {"top_k": top_k, "pct": pct_at_cutoff, "top_labels": top_labels}
-    
 
-mix_tab, = st.tabs(["Mix"])
-with mix_tab:
-    pareto_fig, info = make_pareto_chart(cat_reg_df, "category", "total_revenue", cutoff=0.80,
-                                         title="Pareto: Revenue by Category")
+
+
+# always ensure DB is in sync with CSVs (cached by signature)
+status = build_database_if_needed(_csv_signature())
+
+st.title("Data Analysis Dashboard")
+
+
+# Main KPIs (use cached run_query)
+st.header("Monthly Key Performance Indicators")
+
+st.info(
+    """
+    Track key performance trends over time:  
+    - **Revenue:** Total monthly sales revenue.  
+    - **Total Orders:** Number of customer purchases.  
+    - **Units Sold:** Quantity of products sold.  
+    - **Average Order Value (AOV):** Revenue per order.  
+
+    Use the tabs to switch between metrics and monitor growth, seasonality, and shifts in customer behavior.
+    """
+)
+tab1, tab2, tab3, tab4 = st.tabs(["Revenue", "Total Orders", "Units sold", "Average Order Value"])
+
+
+kpi_df = run_query(load_sql("queries/main_kpi_summary.txt"))
+
+with tab1:
+    st.plotly_chart(make_kpi_line(kpi_df, "total_revenue", use_moving_average=True), use_container_width=True)
+with tab2:
+    st.plotly_chart(make_kpi_line(kpi_df, "total_orders", use_moving_average=False), use_container_width=True)
+with tab3:
+    st.plotly_chart(make_kpi_line(kpi_df, "units_sold", use_moving_average=False), use_container_width=True)
+with tab4:
+    st.plotly_chart(make_kpi_line(kpi_df, "average_order_value", use_moving_average=False), use_container_width=True)
+
+st.markdown("<br><br>", unsafe_allow_html=True)
+
+# Category and Region Insights tab
+st.header("Category and Region Insights")
+st.info(
+    """
+    Explore where revenue comes from:
+    - **Categories (Pareto):** See which categories drive ~80% of revenue.
+    - **Region & Category Mix:** Treemap of category performance within each region.
+    - **Regional Breakdown:** Stacked bars showing which regions make the most and what drives them.
+    """
+)
+
+tab_cat, tab_mix, tab_reg = st.tabs(["Categories (Pareto)", "Region & Category Mix", "Regional Breakdown"])
+
+# Pareto chart
+with tab_cat:
+    cat_reg_df = run_query(load_sql("queries/top_category.txt"))
+    pareto_fig, info = make_pareto_chart(cat_reg_df, "category", "total_revenue", cutoff=0.80, title="")
     st.plotly_chart(pareto_fig, use_container_width=True)
     pct_str = f"{info['pct']*100:.0f}%"
-    lead_list = ", ".join(info["top_labels"])
-    st.info(f"Top {info['top_k']} categories make up {pct_str} of revenue. Leaders: {lead_list}.")
+    st.info(f"Top {info['top_k']} categories make up {pct_str} of revenue: {', '.join(info['top_labels'])}.")
 
-rc_df = run_query(load_sql("queries/region_category_heatmap.txt"))
+# Treemap diagram
+with tab_mix:
+    rc_df = run_query(load_sql("queries/region_category_heatmap.txt"))
+    fig_tree = px.treemap(rc_df, path=["region", "category"], values="total_revenue",
+                          title="Revenue by Region and Category")
+    fig_tree.update_traces(hovertemplate="Path: %{label}<br>Revenue: $%{value:,.0f}<extra></extra>")
+    fig_tree.update_layout(template="plotly_white", margin=dict(l=10, r=10, t=80, b=10),
+                           title=dict(x=0.5, xanchor="center", yanchor="top", pad=dict(t=20)))
+    st.plotly_chart(fig_tree, use_container_width=True)
 
-region_totals = rc_df.groupby("region", as_index=False)["total_revenue"].sum()
-top_region_row = region_totals.loc[region_totals["total_revenue"].idxmax()]
-top_region = top_region_row["region"]
-top_region_revenue = top_region_row["total_revenue"]
+# Stacked bars for category and revenue
+with tab_reg:
+    if 'rc_df' not in locals():
+        rc_df = run_query(load_sql("queries/region_category_heatmap.txt"))
 
-top_cat_row = (
-    rc_df[rc_df["region"] == top_region]
-      .groupby("category", as_index=False)["total_revenue"].sum()
-      .sort_values("total_revenue", ascending=False)
-      .iloc[0]
-)
-top_category_in_region = top_cat_row["category"]
-top_category_revenue = top_cat_row["total_revenue"]
+    region_totals = rc_df.groupby("region", as_index=False)["total_revenue"].sum()
+    region_order = region_totals.sort_values("total_revenue", ascending=False)["region"].tolist()
 
-fig_tree = px.treemap(rc_df, path=["region", "category"], values="total_revenue",
-                      title="Revenue by Region and Category")
-fig_tree.update_traces(hovertemplate="Path: %{label}<br>Revenue: $%{value:,.0f}<extra></extra>")
-fig_tree.update_layout(template="plotly_white", margin=dict(l=10, r=10, t=80, b=10),
-                       title=dict(x=0.5, xanchor="center", yanchor="top", pad=dict(t=20)))
-st.plotly_chart(fig_tree, use_container_width=True)
+    fig_stack = px.bar(rc_df, x="region", y="total_revenue", color="category",
+                       title="Which Regions Make the Most (and What’s Driving It)")
+    fig_stack.update_traces(hovertemplate="%{x}<br>%{fullData.name}: $%{y:,.0f}<extra></extra>")
+    fig_stack.update_layout(barmode="stack", template="plotly_white",
+                            margin=dict(l=10, r=10, t=80, b=10),
+                            title=dict(x=0.5, xanchor="center", yanchor="top", pad=dict(t=20)),
+                            legend_title_text="Category")
+    fig_stack.update_xaxes(categoryorder="array", categoryarray=region_order)
+    fig_stack.update_yaxes(tickprefix="$", separatethousands=True, title_text="Revenue")
+    st.plotly_chart(fig_stack, use_container_width=True)
 
-region_order = region_totals.sort_values("total_revenue", ascending=False)["region"].tolist()
-fig_stack = px.bar(rc_df, x="region", y="total_revenue", color="category",
-                   title="Which Regions Make the Most (and What’s Driving It)")
-fig_stack.update_traces(hovertemplate="%{x}<br>%{fullData.name}: $%{y:,.0f}<extra></extra>")
-fig_stack.update_layout(barmode="stack", template="plotly_white",
-                        margin=dict(l=10, r=10, t=80, b=10),
-                        title=dict(x=0.5, xanchor="center", yanchor="top", pad=dict(t=20)),
-                        legend_title_text="Category")
-fig_stack.update_xaxes(categoryorder="array", categoryarray=region_order)
-fig_stack.update_yaxes(tickprefix="$", separatethousands=True, title_text="Revenue")
-st.plotly_chart(fig_stack, use_container_width=True)
+    # Insight
+    top_region_row = region_totals.loc[region_totals["total_revenue"].idxmax()]
+    top_region, top_region_revenue = top_region_row["region"], top_region_row["total_revenue"]
+    top_cat_row = (rc_df[rc_df["region"] == top_region]
+                   .groupby("category", as_index=False)["total_revenue"].sum()
+                   .sort_values("total_revenue", ascending=False).iloc[0])
+    st.info(
+        f"{top_region} leads with ${top_region_revenue:,.0f}. "
+        f"Within {top_region}, {top_cat_row['category']} contributes {top_cat_row['total_revenue']:,.0f}."
+    )
 
-# fix the earlier bug (missing $)
-rev_str = f"${top_region_revenue:,.0f}"
-cat_rev_str = f"{top_category_revenue:,.0f}"
-st.info(f"{top_region} is the top region with {rev_str} in revenue. "
-        f"Within {top_region}, {top_category_in_region} leads at {cat_rev_str}.")
+st.markdown("<br><br>", unsafe_allow_html=True)
+
+
+
 
 # Store performance (queries now cached)
-st.subheader("Store Performance")
+st.header("Store Performance")
+st.info(
+    """
+    This section provides a breakdown of store-level performance.  
+    - On the **left**, you can view a summary table for all stores.  
+    - On the **right**, select a store to explore detailed **KPI trends** (revenue, orders, units, AOV)  
+      and **product/category performance**.  
+    - Use the dropdowns to change the time period or metric.  
+    """
+)
+
 col1, col2 = st.columns([1, 2])
 
 all_store_df = run_query(load_sql("queries/all_stores_performance.txt"))
 with col1:
     st.dataframe(all_store_df)
+    #orst.dataframe(all_store_df, use_container_width=True, height=all_store_df.shape[0]*35)
 
 with col2:
     st.write("**Select which store you want to look at.**")
@@ -424,20 +465,24 @@ with col2:
                 st.info("No product sales found for this store.")
 
 
+st.markdown("<br><br>", unsafe_allow_html=True)
 
 # Inventory Tab
-st.subheader("Inventory Check")
+st.header("Inventory Check")
 st.info(
     "This tab helps you identify **stock risks** and operational signals:\n\n"
     "- **Low-Stock Risk Table**: Highlights products at risk of stockouts, based on either:\n"
-    "   • Bottom X% of stock within their category (percentile rule), or\n"
-    "   • Stock coverage below the critical threshold in months (coverage rule).\n"
+    "  bottom X% of stock within their category (percentile rule), or\n"
+    "  stock coverage below the critical threshold in months (coverage rule).\n"
     "- **Category Stock Levels Chart**: Compares average stock vs. average monthly sales per category.\n"
     "- Use the sliders and filters above the table to adjust the cutoff and focus on categories of interest.\n"
-    "- You can also download the current risk table as CSV for further analysis."
+    "- You can also download the current risk table as CSV for further analysis.\n"
+    "- Use the slider and filter above the **Category Stock Level Chart** to adjust the critical coverage threshold and to view the top categories."
 )
 
+
 #Low stock risk table section
+st.subheader("Low Stock Risk")
 low_stock_df = run_query(load_sql("queries/inventory_tab_low_stock_risk.txt"))
 if low_stock_df.empty:
         st.info("No inventory data available.")
@@ -446,7 +491,7 @@ with c1:
     # Percentile to flag "at-risk" (default bottom 15%)
     pct = st.slider("Risk cutoff (bottom % by category)", min_value=5, max_value=50, value=15, step=5)
 with c2:
-    # Filter categories (optional)
+    # (optional)
     categories = sorted(low_stock_df["category"].dropna().unique().tolist())
     pick_cats = st.multiselect("Filter categories", categories, default=categories)
 with c3:
@@ -537,7 +582,7 @@ else:
     )
 
 
-#Category stock levels
+#Category stock levels section
 st.subheader("Category Stock Levels")
 cat_levels_df = run_query(load_sql("queries/inventory_category_stock_levels.txt"))
 
@@ -602,3 +647,254 @@ else:
         mime="text/csv",
         use_container_width=True,
     )
+
+
+
+
+
+#Customers Tab
+st.header("Customers Analysis")
+st.info(
+    """
+    Explore customer value and retention:
+
+    - **Top customers (by revenue):** Use *Top customers* and *Filter categories* to aggregate spend across the selected
+      categories. The **table (left)** lists each customer once with total revenue and their categories; the **bar chart (right)**
+      mirrors the table. Hover to see category breakdowns and revenue.
+
+    - **Cohort retention checkpoints:** Each cohort shows a group of customers who bought an item for the very first time in any store. The bar chart shows 
+      their first month buying it, and the percentage of returning customers in subsequent months.
+
+    - **Engagement segments:** Customers are grouped as **New (1 order month)**, **Repeat (2–4 order months)**, and **Loyal (5+ order months)**.
+      The table shows revenue, customer counts, average order months, and revenue share (downloadable as CSV).
+    """
+)
+
+cust_tab, = st.tabs(["Retention & Behavior"])
+with cust_tab:
+    customer_df = run_query(load_sql("queries/customer_order_data.txt"))
+    if customer_df.empty:
+        st.info("No customer transactions available.")
+    else:
+        
+        #Cohort Retention Logic starts here
+        tx = customer_df.copy()
+        tx["order_month"] = pd.to_datetime(tx["order_month"])
+        #Get the first month of each customer's orders
+        first_month = tx.groupby("customer_id")["order_month"].min().rename("cohort_month")
+        #Merge back so every customer has a known first month
+        tx = tx.merge(first_month, on="customer_id", how="left")
+        def month_diff(a, b):
+            return (a.year - b.year) * 12 + (a.month - b.month)
+        #Get how many month since the first purchase that a transaction happened.
+        tx["period_number"] = tx.apply(lambda r: month_diff(r["order_month"], r["cohort_month"]), axis=1)
+
+        #Checks each cohort's first size(number of customers) at the time the period number is 0
+        cohort_sizes = (
+        tx[tx["period_number"] == 0]
+        .groupby("cohort_month")["customer_id"].nunique()
+        .rename("cohort_size")
+        )   
+
+        #Checks how many customers were active in each cohort at each period number
+        cohort_pivot = (tx.groupby(["cohort_month", "period_number"])["customer_id"].nunique().reset_index().pivot(index="cohort_month", columns="period_number", values="customer_id").fillna(0))
+
+        #Gets the % of customers still active.
+        cohort_retention = (cohort_pivot.T / cohort_sizes).T.fillna(0)
+        
+        #Cohort Retention Logic ends here
+
+        #Repeat Purchase Rate logic starts here
+        cust_order_counts = tx.groupby("customer_id")["order_month"].nunique().rename("order_months_count")
+        total_customers = cust_order_counts.shape[0]
+        repeat_customers = int((cust_order_counts >= 2).sum())
+        repeat_rate = (repeat_customers / total_customers * 100) if total_customers else 0
+   
+        #Repeat Purchase Rate logic ends here
+
+        
+        #Customer segmentation logic starts here
+        
+        #To separate each customer based on the amount of orders.
+        def seg(n):
+            if n == 1: return "New (1 order month)"
+            if 2 <= n <= 4: return "Repeat (2–4 order months)"
+            return "Loyal (5+ order months)"
+
+        cust_orders = tx.groupby("customer_id").agg(orders=("order_month", "nunique"),revenue=("revenue", "sum")).reset_index()
+        cust_orders["segment"] = cust_orders["orders"].apply(seg)
+
+        seg_table = (
+            cust_orders.groupby("segment", as_index=False)
+                    .agg(Customers=("customer_id", "nunique"),
+                            Revenue=("revenue", "sum"),
+                            Avg_Orders=("orders", "mean"))
+        )
+
+        seg_table = seg_table.sort_values("Revenue", ascending=False)
+        total_rev_all = seg_table["Revenue"].sum()
+        if total_rev_all:
+            seg_table["Revenue Share"] = seg_table["Revenue"] / total_rev_all
+
+        #Customer segmentation logic ends here
+
+        
+        #Metrics for customers
+        k1, k2, k3 = st.columns(3)
+        k1.metric("Repeat Purchase Rate", f"{repeat_rate:.0f}%")
+        k2.metric("Customers (≥2 order months)", f"{repeat_customers:,}")
+        k3.metric("Total Customers", f"{total_customers:,}")
+
+
+        #Individual customer revenue
+        
+        customer_revenue_df = run_query(load_sql("queries/customer_revenue.txt"))
+        c1, c2 = st.columns([1, 1])
+        with c1:
+            top_n = st.slider("Top customers", min_value=3, max_value=20, value=5, step=1)
+        with c2:
+            sel_categories = sorted(customer_revenue_df["category"].dropna().unique().tolist())
+            sort_order = st.multiselect("Filter categories", categories)
+
+        if customer_revenue_df.empty:
+            st.info("No customer/category revenue data available.")
+        else:
+            df = customer_revenue_df.copy()
+            if sort_order:
+                df = df[df["category"].isin(sort_order)]
+
+            if df.empty:
+                st.info("No rows match the selected categories.")
+            else:
+                agg = (
+                    df.groupby("customer_name")
+                    .agg(
+                        total_revenue=("total_revenue", "sum"),
+                        categories=("category", lambda x: ", ".join(sorted(set(x))))
+                    )
+                    .reset_index()
+                )
+            top_customers = agg.sort_values("total_revenue", ascending=False).head(top_n)
+
+            tcol, ccol = st.columns([1, 1], gap="large")
+
+            with tcol:
+                st.subheader("Top Customers (Aggregated Across Selected Categories)")
+                view = top_customers.rename(columns={
+                    "customer_name": "Customer",
+                    "total_revenue": "Revenue",
+                    "categories": "Categories"
+                })
+                st.dataframe(
+                    view.assign(Revenue=lambda d: d["Revenue"].round(2)),
+                    use_container_width=True,
+                    hide_index=True
+                )
+                # Optional download
+                st.download_button(
+                    "⬇️ Download table (CSV)",
+                    data=view.to_csv(index=False).encode("utf-8"),
+                    file_name="top_customers_aggregated.csv",
+                    mime="text/csv",
+                    use_container_width=True,
+                )
+
+            with ccol:
+
+                # For a clean horizontal bar: sort ascending so largest appears at top after plotting
+                plot_df = top_customers.sort_values("total_revenue", ascending=True).copy()
+                plot_df["hover_cat"] = plot_df["categories"]
+                fig = px.bar(
+                    plot_df,
+                    x="total_revenue",
+                    y="customer_name",
+                    orientation="h",
+                    title=(
+                        f"Top {len(plot_df)} Customers by Revenue"
+                        + (f" — {', '.join(sort_order)}" if sort_order else " — All Categories")
+                    ),
+                    labels={"total_revenue": "Revenue", "customer_name": "Customer"},
+                    text=plot_df["total_revenue"].map(lambda v: f"${v:,.0f}")
+                )
+                fig.update_traces(
+                    textposition="outside",
+                    cliponaxis=False,
+                    hovertemplate="Customer: %{y}<br>Categories: %{customdata}<br>Revenue: $%{x:,.0f}<extra></extra>",
+                    customdata=plot_df["hover_cat"]
+                )
+                fig.update_layout(
+                    template="plotly_white",
+                    margin=dict(l=10, r=10, t=80, b=10),
+                )
+                fig.update_xaxes(tickprefix="$", separatethousands=True)
+                st.plotly_chart(fig, use_container_width=True)
+
+
+
+        
+
+
+        def make_checkpoint_bars(cohort_retention: pd.DataFrame, checkpoints=(1,2,3), title="Checkpoint Retention by Cohort"):
+            bars = (cohort_retention.copy() * 100)
+            bars = bars[[c for c in bars.columns if c in checkpoints]]
+            bars_long = (
+                bars.reset_index()
+                    .melt(id_vars="cohort_month", var_name="Months since first purchase", value_name="Retention %")
+                    .dropna()
+            )
+            fig = px.bar(
+                bars_long,
+                x="cohort_month",
+                y="Retention %",
+                color="Months since first purchase",
+                barmode="group",
+                title=title,
+                labels={"cohort_month": "Cohort (first purchase month)"},
+                text=bars_long["Retention %"].round(0).astype(int).astype(str) + "%"
+            )
+            fig.update_traces(textposition="outside", cliponaxis=False)
+            fig.update_xaxes(
+                tickmode="array",
+                tickvals=bars_long["cohort_month"].unique(), 
+                tickangle=-45                            
+            )
+            fig.update_layout(template="plotly_white", margin=dict(l=10, r=10, t=80, b=10))
+            return fig
+        
+        st.subheader("Checkpoint Retention By Cohort")
+        fig_chk = make_checkpoint_bars(cohort_retention, checkpoints=(1,2,3,4))
+        st.plotly_chart(fig_chk, use_container_width=True)
+
+        
+
+
+        #Customer segmentation table
+        st.subheader("Top Customer Segments by Revenue")
+        st.dataframe(
+            seg_table.assign(
+                Revenue=lambda d: d["Revenue"].round(2),
+                Avg_Orders=lambda d: d["Avg_Orders"].round(2),
+                **({"Revenue Share": (seg_table["Revenue Share"]*100).round(0).astype("Int64").astype(str) + "%"}
+                if "Revenue Share" in seg_table else {})
+            ),
+            use_container_width=True,
+            hide_index=True
+        )
+
+        #CSV download for further analysis
+        st.download_button(
+        "⬇️ Download segments (CSV)",
+        data=seg_table.to_csv(index=False).encode("utf-8"),
+        file_name="customer_segments.csv",
+        mime="text/csv",
+        use_container_width=True,
+        )
+
+        month2_avg = (cohort_retention[2].mean() * 100) if 2 in cohort_retention.columns else None
+        insight = ""
+        if month2_avg is not None:
+            insight = f"Retention averages ~{month2_avg:.0f}% by the 2nd month; targeted promotions could improve repeat orders."
+        else:
+            insight = "Retention drops after the early months; targeted promotions could improve repeat orders."
+        st.info(insight)
+

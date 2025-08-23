@@ -1,0 +1,3 @@
+SELECT s.customer_id, DATE(s.sale_date) AS sale_date, CAST(strftime('%Y-%m-01', s.sale_date) AS TEXT) AS order_month, (s.quantity * p.price) AS revenue
+FROM sales s
+JOIN products p ON p.product_id = s.product_id
