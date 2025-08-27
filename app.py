@@ -285,12 +285,12 @@ st.info(
     """
     Explore where revenue comes from:
     - **Categories (Pareto):** See which categories drive ~80% of revenue.
-    - **Region & Category Mix:** Treemap of category performance within each region.
+    - **Region & Category Treemap:** Treemap of category performance within each region.
     - **Regional Breakdown:** Stacked bars showing which regions make the most and what drives them.
     """
 )
 
-tab_cat, tab_mix, tab_reg = st.tabs(["Categories (Pareto)", "Region & Category Mix", "Regional Breakdown"])
+tab_cat, tab_mix, tab_reg = st.tabs(["Categories (Pareto)", "Region & Category Treemap", "Regional Breakdown"])
 
 # Pareto chart
 with tab_cat:
@@ -302,7 +302,7 @@ with tab_cat:
 
 # Treemap diagram
 with tab_mix:
-    rc_df = run_query(load_sql("queries/region_category_heatmap.txt"))
+    rc_df = run_query(load_sql("queries/region_category_rev.txt"))
     fig_tree = px.treemap(rc_df, path=["region", "category"], values="total_revenue",
                           title="Revenue by Region and Category")
     fig_tree.update_traces(hovertemplate="Path: %{label}<br>Revenue: $%{value:,.0f}<extra></extra>")
@@ -313,7 +313,7 @@ with tab_mix:
 # Stacked bars for category and revenue
 with tab_reg:
     if 'rc_df' not in locals():
-        rc_df = run_query(load_sql("queries/region_category_heatmap.txt"))
+        rc_df = run_query(load_sql("queries/region_categor_rev.txt"))
 
     region_totals = rc_df.groupby("region", as_index=False)["total_revenue"].sum()
     region_order = region_totals.sort_values("total_revenue", ascending=False)["region"].tolist()
@@ -368,7 +368,7 @@ with col2:
     st.write("**Select which store you want to look at.**")
     selected_store = st.selectbox("Choose a store", options=all_store_df["store_name"].tolist())
 
-    kpi_tab, products_tab = st.tabs(["KPI Trends", "Top Products"])
+    kpi_tab, products_tab = st.tabs(["KPI Trends", "Top Items"])
 
     with kpi_tab:
         kpi_store_df = run_query(load_sql("queries/store_kpi_summary.txt"), params=(selected_store,))
@@ -898,3 +898,208 @@ with cust_tab:
             insight = "Retention drops after the early months; targeted promotions could improve repeat orders."
         st.info(insight)
 
+
+st.header("About")
+st.info(
+    "This page explains how metrics are calculated, what data powers the charts, and the tools used. "
+    "Use it as a reference for stakeholders and future maintenance."
+)
+
+tab_metrics,tab_dict = st.tabs(
+    ["Metrics", "Data Dictionary"]
+)
+
+# ---------- Metrics ----------
+with tab_metrics:
+    #Main KPIs
+    st.subheader("Monthly Key Performance Indicators")
+    st.markdown(
+        """
+        **Main KPIs (Monthly)**  
+        - **Revenue** = Σ (*quantity × unit_price*) from `sales × products.price`  
+        - **Total Orders** = Count of number of orders grouped by month   
+        - **Units Sold** = Σ *quantity*  
+        - **Average Order Value (AOV)** = **Revenue ÷ Total Orders**  
+
+
+        **Moving Average (Main KPIs)**  
+        - 3-month simple moving average on the selected KPI series; shown only when enabled.""")
+    with st.expander("SQL query for Main KPIs"):
+        st.code(load_sql("queries/store_kpi_summary.txt"), language="sql")
+
+    #Category and region 
+    st.subheader("Category and  Region Insights")
+    st.markdown(
+    """
+    **Categories (Pareto)**  
+    - Shows each category’s total revenue, sorted descending.  
+    - Plots cumulative % of revenue and highlights the **minimum number of categories** needed to reach **80%**.  
+    - Calculation: aggregate **total_revenue per category**.
+    """
+    )
+    with st.expander("🔍 Show SQL for Categories (Pareto)"):
+        st.code(load_sql("queries/top_category.txt"), language="sql")
+    st.markdown(
+    """
+    **Region & Category Treemap**  
+    - Each rectangle is a **category** nested within its **region**.  
+      The rectangle **size** reflects total revenue.  
+    - Use it to spot **which regions dominate** and where **underperforming categories** sit.  
+    - Calculation: aggregate **total_revenue by region × category**.
+    """
+    )
+    with st.expander("🔍 Show SQL for Treemap (Region × Category)"):
+        st.code(load_sql("queries/region_category_rev.txt"), language="sql")
+    st.markdown(
+    """
+    **Regional Breakdown**  
+    - Stacked bars show **region totals** and **which categories drive them**.  
+    - Calculation: same **region × category revenue** aggregation as the treemap.
+    """
+    )
+    with st.expander("🔍 Show SQL for Regional Breakdown"):
+        st.code(load_sql("queries/region_category_rev.txt"), language="sql")
+
+
+    #Store Performance
+    st.subheader("Store Performance")
+    st.markdown("""
+    - **Store summary table**
+        - Showcases each store with **Region**, **Revenue**, **Orders**, and **Units**.
+        - Helps to spot the top performing stores.
+    """)
+    with st.expander("SQL query: All Stores Summary"):
+        st.code(load_sql("queries/all_stores_performance.txt"), language="sql")
+    
+    st.markdown("""
+    - **KPI Trends**
+        - **Revenue** = Σ (*quantity × unit_price*)
+        - **Orders** = Count of transactions per month per store  
+        - **Units Sold** = Σ *quantity* per store  
+        - **Average Order Value (AOV)** = **Revenue ÷ Orders**  
+        - Supports time-window filters (*last N months* or *all time*).
+    """)
+    with st.expander("SQL query: Store KPI Trends"):
+        st.code(load_sql("queries/store_kpi_summary.txt"), language="sql")
+
+    st.markdown("""
+    - **Top Items**
+        - **Top Categories**
+            - Aggregated revenue by `category` for the selected store. 
+            - Computes each category’s % share of total store revenue.
+    """)
+    with st.expander("SQL query: Top Categories by Store"):
+        st.code(load_sql("queries/all_stores_category.txt"), language="sql")
+
+    st.markdown("""
+        - **Top Products**
+            - Aggregated revenue by `product_name` within the store.
+    """)
+    with st.expander("SQL query: Top Products by Store"):
+        st.code(load_sql("queries/all_stores_products.txt"), language="sql")
+
+
+    #Inventory
+    st.subheader("Inventory Check")
+    st.markdown("""
+    - **Low Stock Risk**
+        - Flags SKUs (products) that may run out soon, based on two rules:
+            - **Percentile Rule**: Product is in the bottom *X%* of stock within its category.  
+            - **Coverage Rule**: Stock coverage (months of stock = Avg Stock ÷ Avg Monthly Sales) falls below a set threshold.  
+        - `Risk Reason` shows if flagged due to **Percentile**, **Coverage**, or **Both**.  
+        - Metrics:
+            - **SKUs at risk** = Count of flagged products  
+            - **Share of SKUs** = % of total products flagged  
+            - **Coverage threshold** = User-set number of months  
+    """)
+    with st.expander("SQL query: Low Stock Risk Table"):
+        st.code(load_sql("queries/inventory_tab_low_stock_risk.txt"), language="sql")
+
+    #Check on the risk band line here
+    st.markdown("""
+    - **Category Stock Levels**
+        - Calculates **coverage** = Avg Stock ÷ Avg Monthly Sales, per category.  
+        - Categories are color-coded by whether they meet or fall below the critical coverage threshold.  
+        - Useful to spot categories most vulnerable to understocking.  
+        - Metrics:
+            - **Coverage (months)** for each category  
+            - **Risk Band** (< threshold = at risk, ≥ threshold = safe)  
+    """)
+    with st.expander("SQL query: Category Stock Levels"):
+        st.code(load_sql("queries/inventory_category_stock_levels.txt"), language="sql")    
+
+    
+    #Customer Analysis
+    st.subheader("Customers Analysis")
+    st.markdown("""
+    - **Repeat purchase rate**
+        - **Definition**: % of customers with **≥ 2 distinct order months**.
+    """)
+    
+    st.markdown("""
+    - **Top customers (by revenue)**
+        - Use **Top customers** and **Filter categories** to aggregate spend across the selected categories.
+        - The **table (left)** lists each customer once with **total revenue** and their **category list**.
+        - The **bar chart (right)** mirrors the table; hover to see the categories and revenue.
+        - **Metric**: `total_revenue = Σ(quantity × price)` aggregated per `customer_name` (optionally filtered by category).
+    """)
+    with st.expander("🔍 SQL query: Top customers by revenue"):
+        st.code(load_sql("queries/customer_revenue.txt"), language="sql")
+
+    st.markdown("""
+    - **Cohort retention checkpoints**
+        - A **cohort** = customers grouped by the **month of their first purchase** (`cohort_month`).
+        - For each cohort, we compute % of customers **active again** at month 1, 2, 3, … after their first purchase.
+        - The bar chart shows those **checkpoint rates** (e.g., months 1–4) by cohort month.
+        - **Key steps in code**:
+            1) Derive `cohort_month` = min(`order_month`) per customer  
+            2) Compute `period_number` = months since `cohort_month`  
+            3) Count unique active customers per `(cohort_month, period_number)`  
+            4) Divide by **cohort size** (period 0) → **retention rate**
+    """)
+    with st.expander("🔍 SQL query: Cohort retention for customers"):
+        st.code(load_sql("queries/customer_order_data.txt"), language="sql")
+    
+    st.markdown("""
+    - **Engagement segments**
+        - Segment customers by **number of order months**:
+            - **New**: 1 order month  
+            - **Repeat**: 2–4 order months  
+            - **Loyal**: 5+ order months  
+        - The table shows **Revenue**, **Customers**, **Avg_Orders**, and **Revenue Share** per segment.
+        - **Notes**:
+            - `orders` = count of distinct `order_month` per customer  
+            - `revenue` = Σ(quantity × price) per customer  
+            - `Revenue Share` = segment revenue ÷ total customer revenue
+    """)
+    with st.expander("🔍 SQL query: Engagement Segments"):
+        st.code(load_sql("queries/customer_order_data.txt"), language="sql")
+
+       
+with tab_dict:
+    st.subheader("Data Dictionary (Key Tables & Query Files Used)")
+    st.markdown(
+        """
+        **Tables**  
+        - **products**: `product_id`, `product_name`, `category`, `price`  
+        - **sales**: `sale_id`, `store_id`, `product_id`, `customer_id`, `quantity`, `sale_date`
+        - **stores**: `store_id`, `store_name`, `city`, `region`  
+        - **customers**: `customer_id`, `name` , `gender`,`age`, `city`
+        - **inventory**: `store_id`,`product_id`, `stock_quantity`, `last_updated`
+
+        **Queries used**  
+        - `queries/main_kpi_summary.txt` – Monthly KPIs (Revenue, Orders, Units, AOV)  
+        - `queries/top_category.txt` – Revenue by category  
+        - `queries/region_category_heatmap.txt` – Revenue by region × category  
+        - `queries/all_stores_performance.txt` – Store overview table(Store Name, Region, Revenue, Orders, Units Sold, AOV)  
+        - `queries/store_kpi_summary.txt` – Store-level KPIs by month(Revenue, Orders, Units, AOV)
+        - `queries/all_stores_category.txt` – Store-level categories by revenue  
+        - `queries/all_stores_products.txt` – Store-level products by revenue  
+        - `queries/inventory_tab_low_stock_risk.txt` – Low-stock risk inputs  
+        - `queries/inventory_category_stock_levels.txt` – Category stock for monthly coverage analysis      
+        - `queries/customer_order_data.txt` – Customer transactions for cohorts/segments  
+        - `queries/customer_revenue.txt` – Customer × category revenue
+        """
+    )
+
+    
