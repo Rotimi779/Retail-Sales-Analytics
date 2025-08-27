@@ -42,7 +42,6 @@ The project uses **SQLite** as a lightweight analytical database, rebuilt automa
 ### 6. **About Tab**  
 - Data dictionary, metric definitions, SQL methodology.  
 - Transparent SQL queries viewable via expanders.  
-- Tech stack & deployment notes.  
 
 ---
 
@@ -58,4 +57,18 @@ The project uses **SQLite** as a lightweight analytical database, rebuilt automa
 ---
 
 ## 📂 Project Structure  
+
+
+## ⚙️ Setup & Run  
+
+1. **Clone repo & install dependencies**  
+
+```bash
+git clone https://github.com/Rotimi779/retail-sales-analytics.git
+cd retail-sales-analytics
+pip install -r requirements.txt
+```
+2. **Run the App**
+streamlit run app.py
+x`
 
