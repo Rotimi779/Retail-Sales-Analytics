@@ -114,7 +114,7 @@ def forecast_revenue(revenue_series, periods=3):
         st.error(f"Error in forecasting: {str(e)}")
         return None, None, (None, None)
 
-def create_forecast_chart(historical_data, forecast, fitted_values, confidence_intervals):
+def create_forecast_chart(historical_data, forecast, fitted_values, confidence_intervals, forecast_periods):
     """
     Create an interactive Plotly chart showing historical data and forecast
     """
@@ -164,7 +164,7 @@ def create_forecast_chart(historical_data, forecast, fitted_values, confidence_i
         ))
     
     fig.update_layout(
-        title='Revenue Forecast - Next 3 Months',
+        title=f'Revenue Forecast - Next {forecast_periods} Months',
         xaxis_title='Month',
         yaxis_title='Revenue ($)',
         hovermode='x unified',
@@ -224,7 +224,7 @@ def render_forecasting_tab():
         
         if forecast is not None:
             # Create chart
-            fig = create_forecast_chart(df_revenue, forecast, fitted_values, confidence_intervals)
+            fig = create_forecast_chart(df_revenue, forecast, fitted_values, confidence_intervals, forecast_periods)
             st.plotly_chart(fig, use_container_width=True)
             
             # Forecast table
