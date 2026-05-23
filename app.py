@@ -6,6 +6,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from forecasting import render_forecasting_tab
+from ml_forecasting import render_ml_forecasting_tab
 
 # ─────────────────────────────
 # App & Paths
@@ -910,7 +911,14 @@ with main_tab5:
 # TAB 6: FORECASTING
 # ═════════════════════════════════════════════════════════════════════════════
 with main_tab6:
-    render_forecasting_tab()
+    fc_tab1, fc_tab2 = st.tabs([
+        "📈 Holt-Winters (Statistical)",
+        "🤖 Feature-Based (ML)"
+    ])
+    with fc_tab1:
+        render_forecasting_tab()
+    with fc_tab2:
+        render_ml_forecasting_tab()
 
 
 # ═════════════════════════════════════════════════════════════════════════════

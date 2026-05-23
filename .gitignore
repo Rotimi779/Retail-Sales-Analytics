@@ -2,3 +2,4 @@ analysis.py
 original_app.py
 queries.py
 __pycache__/forecasting.cpython-312.pyc
+__pycache__/ml_forecasting.cpython-312.pyc
